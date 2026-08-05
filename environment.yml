@@ -1,0 +1,18 @@
+name: nadocast-dashboard
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - beautifulsoup4
+  - cfgrib
+  - eccodes
+  - fiona
+  - geopandas
+  - matplotlib
+  - numpy
+  - pandas
+  - pyogrio
+  - pyproj
+  - requests
+  - shapely
+  - xarray
