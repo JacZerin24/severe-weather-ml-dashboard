@@ -83,7 +83,7 @@ def run_for_cwa(root: Path, site_dir: Path, cache_dir: Path, cwa: str, days_back
     out_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
         sys.executable,
-        str(root / "scripts" / "run_nadocast_cwa.py"),
+        str(root / "scripts" / "run_nadocast_cwa_context.py"),
         "--cwa", cwa,
         "--date", "latest",
         "--run", "latest",
