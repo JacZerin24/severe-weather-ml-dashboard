@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AI/ML Severe Weather Dashboard</title>
+  <style>
+    :root { color-scheme: light dark; --card:#fff; --text:#17212b; --muted:#56616d; --line:#d7dee5; --accent:#0b6fb7; }
+    * { box-sizing:border-box; }
+    body { margin:0; padding:18px; font-family:Arial,sans-serif; color:var(--text); background:linear-gradient(rgba(244,248,251,.88),rgba(244,248,251,.88)),url('https://wallpapers.com/images/high/light-blue-sky-high-resolution-clouds-hswmztfo862ydkpm.webp') center/cover fixed; }
+    header { text-align:center; max-width:1500px; margin:auto; }
+    .logos { position:fixed; top:10px; left:10px; display:flex; gap:8px; z-index:20; }
+    .logos img { width:86px; height:86px; object-fit:contain; background:#fff; padding:4px; border-radius:8px; box-shadow:0 2px 10px #0003; }
+    h1 { margin:.25rem 0; }
+    h2 { text-align:center; margin:1rem 0; }
+    .toolbar { display:flex; justify-content:center; align-items:center; gap:8px; margin:14px 0 24px; }
+    select,button { font:inherit; padding:6px 10px; border:1px solid var(--line); border-radius:7px; background:#fff; color:#17212b; }
+    .day { margin:0 auto 42px; max-width:1500px; }
+    .grid { display:flex; flex-wrap:wrap; justify-content:center; align-items:flex-start; gap:18px; }
+    .card { width:335px; padding:11px; text-align:center; background:var(--card); border:1px solid #00000012; border-radius:12px; box-shadow:0 4px 18px #00000016; }
+    .card-title { font-weight:700; margin:2px 0 9px; }
+    .card-title a { color:inherit; }
+    .card img { display:block; width:100%; height:auto; border-radius:7px; cursor:zoom-in; background:#eef2f5; }
+    .label,.status,.stats { margin-top:6px; font-size:.78rem; color:var(--muted); line-height:1.35; }
+    .missing { min-height:120px; display:grid; place-items:center; color:#777; font-style:italic; padding:15px; }
+    .tabs { display:flex; justify-content:center; gap:6px; margin-bottom:8px; flex-wrap:wrap; }
+    .tab { padding:5px 9px; border-radius:7px; background:#e7edf2; cursor:pointer; font-size:.84rem; user-select:none; }
+    .tab.active { background:#cbd9e4; font-weight:700; }
+    .panel { display:none; }
+    .panel.active { display:block; }
+    .trend { display:flex; justify-content:center; align-items:center; gap:7px; margin-top:8px; }
+    .trend button { padding:4px 8px; font-size:.8rem; cursor:pointer; }
+    .trend button:disabled { opacity:.45; cursor:not-allowed; }
+    .links { max-width:1100px; margin:0 auto 40px; }
+    .link-card { width:330px; text-align:left; }
+    .link-card p { color:var(--muted); min-height:44px; }
+    .link-card a { font-weight:700; }
+    img.zoomed { position:fixed; z-index:9999; top:50%; left:50%; transform:translate(-50%,-50%); width:auto; max-width:94vw; max-height:92vh; object-fit:contain; background:#fff; padding:6px; box-shadow:0 0 40px #0009; cursor:zoom-out; }
+    body.zoom-active { overflow:hidden; }
+    @media (prefers-color-scheme:dark) { :root { --card:#111820; --text:#edf2f6; --muted:#bac5ce; --line:#42505c; } body { background:#09121a; } select,button { background:#1a2630; color:#edf2f6; } .tab { background:#26343f; } .tab.active { background:#405362; } }
+    @media (max-width:850px) { body{padding:10px}.logos{position:static;justify-content:center}.logos img{width:62px;height:62px}.card,.link-card{width:min(100%,430px)} }
+  </style>
+</head>
+<body>
+  <div class="logos">
+    <img src="https://www.noaa.gov/sites/default/files/2022-03/noaa_emblem_logo-2022.png" alt="NOAA logo">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/ff/US-NationalWeatherService-Logo.svg/2048px-US-NationalWeatherService-Logo.svg.png" alt="NWS logo">
+  </div>
+  <header>
+    <h1>AI/ML Severe Weather Dashboard</h1>
+    <h2 id="officeTitle"></h2>
+    <div class="toolbar"><label for="wfo"><strong>Select WFO:</strong></label><select id="wfo"></select></div>
+  </header>
+  <main id="dashboard"></main>
+  <script>
+    const offices={ABQ:'Albuquerque',ABR:'Aberdeen',AKQ:'Wakefield',ALY:'Albany',AMA:'Amarillo',APX:'Gaylord',ARX:'La Crosse',BGM:'Binghamton',BIS:'Bismarck',BMX:'Birmingham',BOI:'Boise',BOU:'Denver/Boulder',BOX:'Boston/Norton',BRO:'Brownsville',BTV:'Burlington',BUF:'Buffalo',BYZ:'Billings',CAE:'Columbia',CAR:'Caribou',CHS:'Charleston',CLE:'Cleveland',CRP:'Corpus Christi',CTP:'State College',CYS:'Cheyenne',DDC:'Dodge City',DLH:'Duluth',DMX:'Des Moines',DTX:'Detroit/Pontiac',DVN:'Davenport/Quad Cities',EAX:'Kansas City/Pleasant Hill',EKA:'Eureka',EPZ:'El Paso',EWX:'Austin/San Antonio',FFC:'Peachtree City/Atlanta',FGF:'Grand Forks',FGZ:'Flagstaff',FSD:'Sioux Falls',FWD:'Fort Worth/Dallas',GGW:'Glasgow',GID:'Hastings',GJT:'Grand Junction',GLD:'Goodland',GRB:'Green Bay',GRR:'Grand Rapids',GSP:'Greenville-Spartanburg',GYX:'Gray/Portland',HGX:'Houston/Galveston',HNX:'San Joaquin Valley/Hanford',HUN:'Huntsville',ICT:'Wichita',ILM:'Wilmington NC',ILN:'Wilmington OH',ILX:'Lincoln',IND:'Indianapolis',IWX:'Northern Indiana',JAN:'Jackson',JAX:'Jacksonville',JKL:'Jackson KY',KEY:'Key West',LBF:'North Platte',LCH:'Lake Charles',LIX:'New Orleans/Baton Rouge',LKN:'Elko',LMK:'Louisville',LOT:'Chicago',LOX:'Los Angeles/Oxnard',LSX:'St. Louis',LUB:'Lubbock',LWX:'Baltimore/Washington',LZK:'Little Rock',MAF:'Midland/Odessa',MEG:'Memphis',MFL:'Miami',MFR:'Medford',MHX:'Newport/Morehead City',MKX:'Milwaukee/Sullivan',MLB:'Melbourne',MOB:'Mobile/Pensacola',MPX:'Twin Cities',MQT:'Marquette',MRX:'Morristown/Knoxville',MSO:'Missoula',MTR:'San Francisco Bay Area/Monterey',OAX:'Omaha/Valley',OHX:'Nashville',OKX:'New York/Upton',OTX:'Spokane',OUN:'Norman',PAH:'Paducah',PBZ:'Pittsburgh',PDT:'Pendleton',PHI:'Mount Holly/Philadelphia',PIH:'Pocatello',PQR:'Portland',PSR:'Phoenix',PUB:'Pueblo',RAH:'Raleigh',REV:'Reno',RIW:'Riverton',RLX:'Charleston WV',RNK:'Blacksburg/Roanoke',SEW:'Seattle',SGF:'Springfield',SGX:'San Diego',SHV:'Shreveport',SJT:'San Angelo',SLC:'Salt Lake City',STO:'Sacramento',TAE:'Tallahassee',TBW:'Tampa',TFX:'Great Falls',TOP:'Topeka',TSA:'Tulsa',TWC:'Tucson',UNR:'Rapid City',VEF:'Las Vegas'};
+    const queryWfo=new URLSearchParams(location.search).get('wfo')?.toUpperCase();
+    let currentWfo=offices[queryWfo]?queryWfo:'LIX';
+    const select=document.getElementById('wfo');
+    Object.keys(offices).sort().forEach(code=>select.add(new Option(`${code} — NWS ${offices[code]}`,code)));
+    select.value=currentWfo;
+    select.onchange=()=>{currentWfo=select.value;const u=new URL(location);u.searchParams.set('wfo',currentWfo);history.replaceState(null,'',u);build();};
+
+    const pad=n=>String(n).padStart(2,'0');
+    const ymd=d=>`${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}`;
+    const validMmdd=(base,offset)=>{const d=new Date(base);d.setUTCDate(d.getUTCDate()+offset);return `${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}12`;};
+    const card=title=>{const el=document.createElement('section');el.className='card';el.innerHTML=`<div class="card-title">${title}</div>`;return el;};
+    const image=(src,alt,label='')=>{const wrap=document.createElement('div');const img=document.createElement('img');img.src=src;img.alt=alt;img.loading='lazy';img.onerror=()=>{img.remove();const m=document.createElement('div');m.className='missing';m.textContent='Image not available yet';wrap.prepend(m);};wrap.append(img);if(label){const l=document.createElement('div');l.className='label';l.textContent=label;wrap.append(l);}return {wrap,img};};
+    function tabbed(items){const host=document.createElement('div'),tabs=document.createElement('div'),body=document.createElement('div');tabs.className='tabs';items.forEach((item,i)=>{const t=document.createElement('span');t.className='tab'+(i?'':' active');t.textContent=item.label;const p=document.createElement('div');p.className='panel'+(i?'':' active');p.append(item.node);const activate=()=>{[...tabs.children].forEach((x,j)=>x.classList.toggle('active',j===i));[...body.children].forEach((x,j)=>x.classList.toggle('active',j===i));};t.onmouseenter=activate;t.onclick=activate;tabs.append(t);body.append(p);});host.append(tabs,body);return host;}
+    function addTrend(container,img,frames,label){let index=0;const controls=document.createElement('div'),prev=document.createElement('button'),next=document.createElement('button'),tag=document.createElement('span');controls.className='trend';prev.textContent='◀ Older';next.textContent='Newer ▶';const apply=()=>{img.src=frames[index].src;tag.textContent=`${index+1}/${frames.length}`;if(label)label.textContent=frames[index].label||'';prev.disabled=index===frames.length-1;next.disabled=index===0;};prev.onclick=()=>{index=Math.min(frames.length-1,index+1);apply();};next.onclick=()=>{index=Math.max(0,index-1);apply();};controls.append(prev,tag,next);container.append(controls);apply();}
+
+    function spcCard(day){const title=day===1?'<a href="https://www.spc.noaa.gov" target="_blank" rel="noopener">SPC Outlook</a>':'SPC Outlook',c=card(title);if(day<=2){const types=[['Categorical',''],['Tornado','_TORN'],['Wind','_WIND'],['Hail','_HAIL']];c.append(tabbed(types.map(([label,suffix])=>({label,node:image(`https://www.spc.noaa.gov/partners/outlooks/cwa/images/${currentWfo}_swody${day}${suffix}.png`,`SPC Day ${day} ${label}`).wrap}))));}else{const suffix=day<=3?'':"_PROB";c.append(image(`https://www.spc.noaa.gov/partners/outlooks/cwa/images/${currentWfo}_swody${day}${suffix}.png`,`SPC Day ${day}`,`SPC Day ${day}`).wrap);}return c;}
+
+    function csuCard(day,today,yesterday){const c=card(day===1?'<a href="https://schumacher.atmos.colostate.edu/hilla/csu_mlp/index.php" target="_blank" rel="noopener">CSU MLP</a>':'CSU MLP');const base='https://schumacher.atmos.colostate.edu/weather/csu_mlp/archive',hour=new Date().getUTCHours()<12?'00':'12',run=`${ymd(today)}${hour}`,valid=validMmdd(today,day),dir=`severe_gefso_2021_day${day}`,file=day<=3?`severe_ml_day${day}_all_gefso_${valid}.png`:`severe_ml_day${day}_gefso_${valid}.png`;const current=`${base}/${dir}/${run}/${file}`,fallbackRun=`${ymd(yesterday)}${day<=3?'12':'00'}`,fallbackValid=validMmdd(yesterday,day),fallbackFile=day<=3?`severe_ml_day${day}_all_gefso_${fallbackValid}.png`:`severe_ml_day${day}_gefso_${fallbackValid}.png`,fallback=`${base}/${dir}/${fallbackRun}/${fallbackFile}`;const shown=image(current,`CSU MLP Day ${day}`,`Run ${run}`);let usedFallback=false;shown.img.onerror=()=>{if(!usedFallback){usedFallback=true;shown.img.src=fallback;shown.wrap.querySelector('.label').textContent=`Fallback run ${fallbackRun}`;}else{shown.img.remove();const m=document.createElement('div');m.className='missing';m.textContent='Image not available yet';shown.wrap.prepend(m);}};c.append(shown.wrap);return c;}
+
+    function nsslCard(day){const c=card(day===1?'<a href="https://apps.nssl.noaa.gov/s2s-severe/forecast_gefs_ml.html" target="_blank" rel="noopener">NSSL GEFS ML</a>':'NSSL GEFS ML'),shown=image('',`NSSL Day ${day}`,'');c.append(shown.wrap);const max=day>=4?11-day:7,frames=[];for(let i=0;i<=max;i++)frames.push({src:`https://www.weather.gov/images/eax/mlconv/nssl_combined_day${day}_${i}.png`,label:`NSSL Day ${day} — Frame ${i}`});addTrend(c,shown.img,frames,shown.wrap.querySelector('.label'));return c;}
+
+    const manifestCache=new Map();
+    async function manifest(cwa){if(!manifestCache.has(cwa))manifestCache.set(cwa,fetch(`nadocast/${cwa}/latest.json?t=${Date.now()}`,{cache:'no-store'}).then(r=>{if(!r.ok)throw Error(r.status);return r.json();}));return manifestCache.get(cwa);}
+    function percent(value){return Number.isFinite(value)?`${value.toFixed(1)}%`:'n/a';}
+    function nadocastCard(day){const c=card(day===1?'<a href="http://data.nadocast.com/viewer.html" target="_blank" rel="noopener">NADOCast CWA Probabilities</a>':'NADOCast CWA Probabilities'),loading=document.createElement('div');loading.className='status';loading.textContent='Loading generated CWA maps…';c.append(loading);manifest(currentWfo).then(data=>{if(!c.isConnected)return;loading.remove();const products=data.products?.[`day${day}`]||{},defs=[['tornado','Tornado'],['wind_adj','Wind'],['hail','Hail']],available=defs.filter(([key])=>products[key]);if(!available.length){const m=document.createElement('div');m.className='missing';m.textContent=day===2?'No Day 2 period is available in the latest generated run.':`No generated NADOCast package is available for ${currentWfo}. Add the office to config/cwas.txt and run the workflow.`;c.append(m);return;}const s=document.createElement('div');s.className='status';s.textContent=`Generated ${data.generated_utc||'recently'} from ${data.run_label||'the latest run'}`;c.append(s);c.append(tabbed(available.map(([key,label])=>{const p=products[key],shown=image(`nadocast/${currentWfo}/${p.image}`,`NADOCast ${label} for ${currentWfo}`,`${p.run_date||''} ${(p.run_dir||'').toUpperCase()} | ${p.lead_label||''}`);const stats=document.createElement('div');stats.className='stats';stats.textContent=`CWA max ${percent(p.max_cwa)} | CWA mean ${percent(p.mean_cwa)} | Buffer max ${percent(p.max_buffer)}`;shown.wrap.append(stats);return {label,node:shown.wrap};})));}).catch(()=>{if(!c.isConnected)return;loading.className='missing';loading.textContent=`No generated NADOCast package is available for ${currentWfo}.`;});return c;}
+
+    function build(){document.getElementById('officeTitle').textContent=`NWS ${offices[currentWfo]} (${currentWfo})`;const root=document.getElementById('dashboard');root.replaceChildren();const now=new Date(),today=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate())),yesterday=new Date(today);yesterday.setUTCDate(yesterday.getUTCDate()-1);for(let day=1;day<=7;day++){const section=document.createElement('section');section.className='day';const title=document.createElement('h2'),date=new Date(now);date.setDate(date.getDate()+day-1);title.textContent=`Day ${day} Forecast — ${date.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}`;const grid=document.createElement('div');grid.className='grid';grid.append(spcCard(day),csuCard(day,today,yesterday),nsslCard(day));if(day<=2)grid.append(nadocastCard(day));section.append(title,grid);root.append(section);}const long=document.createElement('section');long.className='day';long.innerHTML='<h2><a href="https://atlas.niu.edu/forecast/scp/" target="_blank" rel="noopener">Long-Range CFS Accumulated Supercell Composite</a></h2>';const lg=document.createElement('div');lg.className='grid';[2,3].forEach(week=>{const c=card(`CFS Week ${week} SCP`);c.append(image(`https://atlas.niu.edu/forecast/scp/cfs_week${week}.png`,`CFS Week ${week} SCP`,`Week ${week}`).wrap);lg.append(c);});long.append(lg);root.append(long);const links=document.createElement('section');links.className='links';links.innerHTML='<h2>Other Useful AI/ML Severe Weather Links</h2><div class="grid"><section class="card link-card"><div class="card-title">HRRR Neural Network</div><p>Interactive NCAR CAM and neural-network guidance.</p><a href="https://www2.mmm.ucar.edu/projects/ncar_ensemble/camviewer/" target="_blank" rel="noopener">Open viewer →</a></section><section class="card link-card"><div class="card-title">NCAR AI NWP Convective Hazards</div><p>Experimental AI-driven convective-hazard probabilities from NCAR.</p><a href="https://www2.mmm.ucar.edu/projects/ncar_ensemble/ainwp/" target="_blank" rel="noopener">Open viewer →</a></section></div>';root.append(links);}
+
+    document.addEventListener('click',event=>{if(event.target.tagName==='IMG'){event.target.classList.toggle('zoomed');document.body.classList.toggle('zoom-active',event.target.classList.contains('zoomed'));}else if(!event.target.closest('.trend,.tabs')){document.querySelectorAll('img.zoomed').forEach(img=>img.classList.remove('zoomed'));document.body.classList.remove('zoom-active');}});
+    document.addEventListener('keydown',event=>{if(event.key==='Escape'){document.querySelectorAll('img.zoomed').forEach(img=>img.classList.remove('zoomed'));document.body.classList.remove('zoom-active');}});
+    build();
+    setInterval(()=>location.reload(),30*60*1000);
+  </script>
+</body>
+</html>
