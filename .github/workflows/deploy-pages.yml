@@ -28,13 +28,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up conda environment
-        uses: conda-incubator/setup-miniconda@v3
+        uses: conda-incubator/setup-miniconda@v4
         with:
           environment-file: environment.yml
           activate-environment: nadocast-dashboard
-          auto-activate-base: false
           miniforge-version: latest
-          use-mamba: true
+          conda-remove-defaults: "true"
 
       - name: Build dashboard and CWA maps
         shell: bash -el {0}
