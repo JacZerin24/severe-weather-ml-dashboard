@@ -1,0 +1,3 @@
+# CWA-specific NADOCast maps generated on each workflow run.
+# Add one 3-letter WFO/CWA identifier per line.
+LIX
