@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from trend_history import update_cwa_trends
+
 DISPLAY_HAZARDS = {"tornado", "wind_adj", "hail"}
 ALL_HAZARDS = ["tornado", "wind_adj", "hail", "sig_tornado", "sig_wind_adj", "sig_hail"]
 
@@ -78,7 +80,7 @@ def build_manifest(results: list[dict], cwa: str, out_dir: Path) -> Path:
     return path
 
 
-def run_for_cwa(root: Path, site_dir: Path, cache_dir: Path, cwa: str, days_back: int) -> dict:
+def run_for_cwa(root: Path, site_dir: Path, cache_dir: Path, archive_dir: Path, cwa: str, days_back: int) -> dict:
     out_dir = site_dir / "nadocast" / cwa
     out_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
@@ -97,7 +99,8 @@ def run_for_cwa(root: Path, site_dir: Path, cache_dir: Path, cwa: str, days_back
     subprocess.run(cmd, cwd=root, check=True)
     summary = out_dir / f"nadocast_{cwa}_summary.json"
     results = json.loads(summary.read_text(encoding="utf-8"))
-    build_manifest(results, cwa, out_dir)
+    manifest_path = build_manifest(results, cwa, out_dir)
+    update_cwa_trends(manifest_path, archive_dir)
     return {"cwa": cwa, "ok": True, "products": len(results)}
 
 
@@ -106,6 +109,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cwas-file", default="config/cwas.txt")
     parser.add_argument("--site-dir", default="site")
     parser.add_argument("--cache-dir", default="cache")
+    parser.add_argument("--archive-dir", default="archive/nadocast")
     parser.add_argument("--days-back", type=int, default=5)
     return parser.parse_args()
 
@@ -115,6 +119,7 @@ def main() -> int:
     root = Path(__file__).resolve().parents[1]
     site_dir = (root / args.site_dir).resolve()
     cache_dir = (root / args.cache_dir).resolve()
+    archive_dir = (root / args.archive_dir).resolve()
     cwas = read_cwas(root / args.cwas_file)
 
     if site_dir.exists():
@@ -127,7 +132,7 @@ def main() -> int:
     statuses: list[dict] = []
     for cwa in cwas:
         try:
-            statuses.append(run_for_cwa(root, site_dir, cache_dir, cwa, args.days_back))
+            statuses.append(run_for_cwa(root, site_dir, cache_dir, archive_dir, cwa, args.days_back))
         except Exception as exc:  # Keep the rest of the configured offices available.
             print(f"ERROR generating {cwa}: {exc}", file=sys.stderr, flush=True)
             statuses.append({"cwa": cwa, "ok": False, "error": str(exc)})
