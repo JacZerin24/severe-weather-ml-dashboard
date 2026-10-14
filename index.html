@@ -24,13 +24,17 @@
     .label,.status,.stats { margin-top:6px; font-size:.78rem; color:var(--muted); line-height:1.35; }
     .missing { min-height:120px; display:grid; place-items:center; color:#777; font-style:italic; padding:15px; }
     .tabs { display:flex; justify-content:center; gap:6px; margin-bottom:8px; flex-wrap:wrap; }
-    .tab { padding:5px 9px; border-radius:7px; background:#e7edf2; cursor:pointer; font-size:.84rem; user-select:none; }
+    .tab { padding:5px 9px; border:0; border-radius:7px; background:#e7edf2; cursor:pointer; font-size:.84rem; user-select:none; }
+    .tab:focus-visible,.trend button:focus-visible { outline:3px solid #126bad; outline-offset:2px; }
     .tab.active { background:#cbd9e4; font-weight:700; }
     .panel { display:none; }
     .panel.active { display:block; }
     .trend { display:flex; justify-content:center; align-items:center; gap:7px; margin-top:8px; }
     .trend button { padding:4px 8px; font-size:.8rem; cursor:pointer; }
     .trend button:disabled { opacity:.45; cursor:not-allowed; }
+    .trend-label { min-width:70px; font-size:.76rem; color:var(--muted); font-variant-numeric:tabular-nums; }
+    .image-wrap img[hidden],.image-wrap .missing[hidden] { display:none!important; }
+    .status-detail { margin-top:9px; font-size:.74rem; color:var(--muted); line-height:1.4; }
     .links { max-width:1100px; margin:0 auto 40px; }
     .link-card { width:330px; text-align:left; }
     .link-card p { color:var(--muted); min-height:44px; }
@@ -65,27 +69,300 @@
     const ymd=d=>`${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}`;
     const validMmdd=(base,offset)=>{const d=new Date(base);d.setUTCDate(d.getUTCDate()+offset);return `${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}12`;};
     const card=title=>{const el=document.createElement('section');el.className='card';el.innerHTML=`<div class="card-title">${title}</div>`;return el;};
-    const image=(src,alt,label='')=>{const wrap=document.createElement('div');const img=document.createElement('img');img.src=src;img.alt=alt;img.loading='lazy';img.onerror=()=>{img.remove();const m=document.createElement('div');m.className='missing';m.textContent='Image not available yet';wrap.prepend(m);};wrap.append(img);if(label){const l=document.createElement('div');l.className='label';l.textContent=label;wrap.append(l);}return {wrap,img};};
-    function tabbed(items){const host=document.createElement('div'),tabs=document.createElement('div'),body=document.createElement('div');tabs.className='tabs';items.forEach((item,i)=>{const t=document.createElement('span');t.className='tab'+(i?'':' active');t.textContent=item.label;const p=document.createElement('div');p.className='panel'+(i?'':' active');p.append(item.node);const activate=()=>{[...tabs.children].forEach((x,j)=>x.classList.toggle('active',j===i));[...body.children].forEach((x,j)=>x.classList.toggle('active',j===i));};t.onmouseenter=activate;t.onclick=activate;tabs.append(t);body.append(p);});host.append(tabs,body);return host;}
-    function addTrend(container,img,frames,label){let index=0;const controls=document.createElement('div'),prev=document.createElement('button'),next=document.createElement('button'),tag=document.createElement('span');controls.className='trend';prev.textContent='◀ Older';next.textContent='Newer ▶';const apply=()=>{img.src=frames[index].src;tag.textContent=`${index+1}/${frames.length}`;if(label)label.textContent=frames[index].label||'';prev.disabled=index===frames.length-1;next.disabled=index===0;};prev.onclick=()=>{index=Math.min(frames.length-1,index+1);apply();};next.onclick=()=>{index=Math.max(0,index-1);apply();};controls.append(prev,tag,next);container.append(controls);apply();}
 
-    function spcCard(day){const title=day===1?'<a href="https://www.spc.noaa.gov" target="_blank" rel="noopener">SPC Outlook</a>':'SPC Outlook',c=card(title);if(day<=2){const types=[['Categorical',''],['Tornado','_TORN'],['Wind','_WIND'],['Hail','_HAIL']];c.append(tabbed(types.map(([label,suffix])=>({label,node:image(`https://www.spc.noaa.gov/partners/outlooks/cwa/images/${currentWfo}_swody${day}${suffix}.png`,`SPC Day ${day} ${label}`).wrap}))));}else{const suffix=day<=3?'':"_PROB";c.append(image(`https://www.spc.noaa.gov/partners/outlooks/cwa/images/${currentWfo}_swody${day}${suffix}.png`,`SPC Day ${day}`,`SPC Day ${day}`).wrap);}return c;}
+    const failedImages=new Set(), retryInFlight=new WeakSet(), trendState=new WeakMap();
+    const sameUrl=(a,b)=>{
+      try{
+        const clean=value=>{const u=new URL(value,location.href);u.searchParams.delete('t');return u.href;};
+        return clean(a)===clean(b);
+      }catch(_){return a===b;}
+    };
+    const image=(src,alt,label='')=>{
+      const wrap=document.createElement('div');wrap.className='image-wrap';
+      const img=document.createElement('img');img.alt=alt;img.loading='lazy';
+      const missing=document.createElement('div');missing.className='missing';
+      missing.textContent='Image not available yet — retrying automatically';missing.hidden=true;
+      const lbl=document.createElement('div');lbl.className='label';lbl.textContent=label;
+      img.addEventListener('error',()=>{img.hidden=true;missing.hidden=false;failedImages.add(img);});
+      img.addEventListener('load',()=>{img.hidden=false;missing.hidden=true;failedImages.delete(img);});
+      wrap.append(img,missing,lbl);
+      if(src)img.src=src;
+      return {wrap,img,label:lbl};
+    };
+    function tabbed(items){
+      const host=document.createElement('div'),tabs=document.createElement('div'),body=document.createElement('div');
+      tabs.className='tabs';tabs.setAttribute('role','tablist');
+      items.forEach((item,i)=>{
+        const tab=document.createElement('button');
+        tab.type='button';tab.className='tab'+(i?'':' active');tab.textContent=item.label;
+        tab.setAttribute('role','tab');tab.setAttribute('aria-selected',String(i===0));
+        const panel=document.createElement('div');panel.className='panel'+(i?'':' active');
+        panel.setAttribute('role','tabpanel');panel.append(item.node);
+        const activate=()=>{
+          [...tabs.children].forEach((t,j)=>{t.classList.toggle('active',j===i);t.setAttribute('aria-selected',String(j===i));});
+          [...body.children].forEach((p,j)=>p.classList.toggle('active',j===i));
+        };
+        tab.onmouseenter=activate;tab.onclick=activate;
+        tab.onkeydown=e=>{
+          if(e.key==='ArrowRight'||e.key==='ArrowLeft'){
+            const next=(i+(e.key==='ArrowRight'?1:-1)+items.length)%items.length;
+            tabs.children[next].focus();tabs.children[next].click();e.preventDefault();
+          }
+        };
+        tabs.append(tab);body.append(panel);
+      });
+      host.append(tabs,body);return host;
+    }
+    // Frames are newest-first; previous means older and next means newer.
+    function addTrend(container,img,frames,label){
+      if(!frames.length||trendState.has(img))return;
+      let idx=frames.findIndex(frame=>sameUrl(frame.src,img.currentSrc||img.src));
+      if(idx<0)idx=0;
+      const ctrls=document.createElement('div'),prev=document.createElement('button'),
+            next=document.createElement('button'),tag=document.createElement('span');
+      ctrls.className='trend';tag.className='trend-label';
+      prev.type='button';next.type='button';
+      prev.textContent='◀ Prev';next.textContent='Next ▶';
+      prev.title='Older forecast run';next.title='Newer forecast run';
+      const apply=()=>{
+        const frame=frames[idx];
+        if(!sameUrl(img.src,frame.src))img.src=frame.src;
+        if(label)label.textContent=frame.label||'';
+        tag.textContent=`Trend ${idx+1} / ${frames.length}`;
+        prev.disabled=idx===frames.length-1;next.disabled=idx===0;
+      };
+      const state={
+        stepOlder(){if(idx<frames.length-1){idx++;apply();}},
+        stepNewer(){if(idx>0){idx--;apply();}}
+      };
+      trendState.set(img,state);
+      prev.onclick=()=>state.stepOlder();next.onclick=()=>state.stepNewer();
+      ctrls.append(prev,tag,next);container.append(ctrls);apply();
+    }
 
-    function csuCard(day,today,yesterday){const c=card(day===1?'<a href="https://schumacher.atmos.colostate.edu/hilla/csu_mlp/index.php" target="_blank" rel="noopener">CSU MLP</a>':'CSU MLP');const base='https://schumacher.atmos.colostate.edu/weather/csu_mlp/archive',latestHour=new Date().getUTCHours()<12?'00':'12',runHour=day<=3?latestHour:'00',run=`${ymd(today)}${runHour}`,valid=validMmdd(today,day),dir=`severe_gefso_2021_day${day}`,file=day<=3?`severe_ml_day${day}_all_gefso_${valid}.png`:`severe_ml_day${day}_gefso_${valid}.png`,primary=`${base}/${dir}/${run}/${file}`,secondaryRun=day<=3&&runHour==='12'?`${ymd(today)}00`:null,secondary=secondaryRun?`${base}/${dir}/${secondaryRun}/${file}`:null,fallbackDay=day>=4?day+1:day,fallbackRun=`${ymd(yesterday)}${day<=3?'12':'00'}`,fallbackValid=day>=4?validMmdd(yesterday,day+1):validMmdd(yesterday,day),fallbackDir=`severe_gefso_2021_day${fallbackDay}`,fallbackFile=fallbackDay<=3?`severe_ml_day${fallbackDay}_all_gefso_${fallbackValid}.png`:`severe_ml_day${fallbackDay}_gefso_${fallbackValid}.png`,fallback=`${base}/${fallbackDir}/${fallbackRun}/${fallbackFile}`,candidates=[{url:primary,label:`Run ${run}`}];if(secondary)candidates.push({url:secondary,label:`Run ${secondaryRun}`});candidates.push({url:fallback,label:`Fallback run ${fallbackRun} (Day ${fallbackDay})`});const shown=image(candidates[0].url,`CSU MLP Day ${day}`,candidates[0].label);let candidateIndex=0;shown.img.onerror=()=>{candidateIndex++;if(candidateIndex<candidates.length){shown.img.src=candidates[candidateIndex].url;shown.wrap.querySelector('.label').textContent=candidates[candidateIndex].label;}else{shown.img.remove();const m=document.createElement('div');m.className='missing';m.textContent='Image not available yet';shown.wrap.prepend(m);}};c.append(shown.wrap);return c;}
 
-    function nsslCard(day){const c=card(day===1?'<a href="https://apps.nssl.noaa.gov/s2s-severe/forecast_gefs_ml.html" target="_blank" rel="noopener">NSSL GEFS ML</a>':'NSSL GEFS ML'),shown=image('',`NSSL Day ${day}`,'');c.append(shown.wrap);const max=day>=4?11-day:7,frames=[];for(let i=0;i<=max;i++)frames.push({src:`https://www.weather.gov/images/eax/mlconv/nssl_combined_day${day}_${i}.png`,label:`NSSL Day ${day} — Frame ${i}`});addTrend(c,shown.img,frames,shown.wrap.querySelector('.label'));return c;}
+        function spcCard(day){const title=day===1?'<a href="https://www.spc.noaa.gov" target="_blank" rel="noopener">SPC Outlook</a>':'SPC Outlook',c=card(title);if(day<=2){const types=[['Categorical',''],['Tornado','_TORN'],['Wind','_WIND'],['Hail','_HAIL']];c.append(tabbed(types.map(([label,suffix])=>({label,node:image(`https://www.spc.noaa.gov/partners/outlooks/cwa/images/${currentWfo}_swody${day}${suffix}.png`,`SPC Day ${day} ${label}`).wrap}))));}else{const suffix=day<=3?'':"_PROB";c.append(image(`https://www.spc.noaa.gov/partners/outlooks/cwa/images/${currentWfo}_swody${day}${suffix}.png`,`SPC Day ${day}`,`SPC Day ${day}`).wrap);}return c;}
+
+
+    function csuFramesFromLoaded(requestedDay,loadedUrl,today){
+      const match=loadedUrl.match(/severe_gefso_2021_day([1-7])\/(\d{8})(00|12)\/severe_ml_day[1-7]_(?:all_)?gefso_\d{4}12\.png/i);
+      let valid;
+      if(match){
+        const date=match[2];
+        valid=new Date(Date.UTC(+date.slice(0,4),+date.slice(4,6)-1,+date.slice(6,8)));
+        valid.setUTCDate(valid.getUTCDate()+Number(match[1]));
+      }else{
+        valid=new Date(today);valid.setUTCDate(valid.getUTCDate()+requestedDay);
+      }
+      const v=`${pad(valid.getUTCMonth()+1)}${pad(valid.getUTCDate())}12`;
+      const base='https://schumacher.atmos.colostate.edu/weather/csu_mlp/archive';
+      const frames=[];
+      for(let lead=requestedDay;lead<=7;lead++){
+        const init=new Date(valid);init.setUTCDate(init.getUTCDate()-lead);
+        const hours=lead<=3?['12','00']:['00'];
+        const filename=lead<=3?`severe_ml_day${lead}_all_gefso_${v}.png`:`severe_ml_day${lead}_gefso_${v}.png`;
+        for(const hour of hours){
+          const run=`${ymd(init)}${hour}`;
+          frames.push({src:`${base}/severe_gefso_2021_day${lead}/${run}/${filename}`,
+            label:`CSU Day ${lead} · Init ${run}Z · Valid ${v}Z`});
+        }
+      }
+      return frames;
+    }
+    function csuCard(day,today,yesterday){
+      const c=card(day===1?'<a href="https://schumacher.atmos.colostate.edu/hilla/csu_mlp/index.php" target="_blank" rel="noopener">CSU MLP</a>':'CSU MLP');
+      const base='https://schumacher.atmos.colostate.edu/weather/csu_mlp/archive';
+      const runHour=day<=3?(new Date().getUTCHours()<12?'00':'12'):'00';
+      const run=`${ymd(today)}${runHour}`,valid=validMmdd(today,day);
+      const filename=day<=3?`severe_ml_day${day}_all_gefso_${valid}.png`:`severe_ml_day${day}_gefso_${valid}.png`;
+      const candidates=[{url:`${base}/severe_gefso_2021_day${day}/${run}/${filename}`,label:`Run ${run}`}];
+      if(day<=3&&runHour==='12'){
+        const early=`${ymd(today)}00`;
+        candidates.push({url:`${base}/severe_gefso_2021_day${day}/${early}/${filename}`,label:`Run ${early}`});
+      }
+      // Retain valid-date-preserving medium-range fallback from the existing dashboard.
+      const fallbackDay=day>=4&&day<7?day+1:day;
+      const fallbackRun=`${ymd(yesterday)}${day<=3?'12':'00'}`,fallbackValid=validMmdd(yesterday,fallbackDay);
+      const fallbackFilename=fallbackDay<=3?`severe_ml_day${fallbackDay}_all_gefso_${fallbackValid}.png`:`severe_ml_day${fallbackDay}_gefso_${fallbackValid}.png`;
+      candidates.push({url:`${base}/severe_gefso_2021_day${fallbackDay}/${fallbackRun}/${fallbackFilename}`,
+        label:`Fallback ${fallbackRun} · Day ${fallbackDay}`});
+      const shown=image(candidates[0].url,`CSU MLP Day ${day}`,candidates[0].label);
+      let choice=0,initialized=false;
+      shown.img.onerror=()=>{
+        if(initialized)return; // Browsing trends must not restart fallback selection.
+        choice++;
+        if(choice<candidates.length){
+          shown.img.src=candidates[choice].url;
+          shown.label.textContent=candidates[choice].label;
+        }
+      };
+      shown.img.addEventListener('load',()=>{
+        if(initialized)return;
+        initialized=true;
+        addTrend(c,shown.img,csuFramesFromLoaded(day,shown.img.currentSrc||shown.img.src,today),shown.label);
+      });
+      c.append(shown.wrap);
+      return c;
+    }
+
+
+        function nsslCard(day){const c=card(day===1?'<a href="https://apps.nssl.noaa.gov/s2s-severe/forecast_gefs_ml.html" target="_blank" rel="noopener">NSSL GEFS ML</a>':'NSSL GEFS ML'),shown=image('',`NSSL Day ${day}`,'');c.append(shown.wrap);const max=day>=4?11-day:7,frames=[];for(let i=0;i<=max;i++)frames.push({src:`https://www.weather.gov/images/eax/mlconv/nssl_combined_day${day}_${i}.png`,label:`NSSL Day ${day} — Frame ${i}`});addTrend(c,shown.img,frames,shown.wrap.querySelector('.label'));return c;}
+
 
     const manifestCache=new Map();
-    async function manifest(cwa){if(!manifestCache.has(cwa))manifestCache.set(cwa,fetch(`nadocast/${cwa}/latest.json?t=${Date.now()}`,{cache:'no-store'}).then(r=>{if(!r.ok)throw Error(r.status);return r.json();}));return manifestCache.get(cwa);}
-    function percent(value){return Number.isFinite(value)?`${value.toFixed(1)}%`:'n/a';}
-    function nadocastCard(day){const c=card(day===1?'<a href="http://data.nadocast.com/viewer.html" target="_blank" rel="noopener">NADOCast CWA Probabilities</a>':'NADOCast CWA Probabilities'),loading=document.createElement('div');loading.className='status';loading.textContent='Loading generated CWA maps…';c.append(loading);manifest(currentWfo).then(data=>{if(!c.isConnected)return;loading.remove();const products=data.products?.[`day${day}`]||{},defs=[['tornado','Tornado'],['wind_adj','Wind'],['hail','Hail']],available=defs.filter(([key])=>products[key]);if(!available.length){const m=document.createElement('div');m.className='missing';m.textContent=day===2?'No Day 2 period is available in the latest generated run.':`No generated NADOCast package is available for ${currentWfo}. Add the office to config/cwas.txt and run the workflow.`;c.append(m);return;}const s=document.createElement('div');s.className='status';s.textContent=`Generated ${data.generated_utc||'recently'} from ${data.run_label||'the latest run'}`;c.append(s);c.append(tabbed(available.map(([key,label])=>{const p=products[key],shown=image(`nadocast/${currentWfo}/${p.image}`,`NADOCast ${label} for ${currentWfo}`,`${p.run_date||''} ${(p.run_dir||'').toUpperCase()} | ${p.lead_label||''}`);const stats=document.createElement('div');stats.className='stats';stats.textContent=`CWA max ${percent(p.max_cwa)} | CWA mean ${percent(p.mean_cwa)} | Buffer max ${percent(p.max_buffer)}`;shown.wrap.append(stats);return {label,node:shown.wrap};})));}).catch(()=>{if(!c.isConnected)return;loading.className='missing';loading.textContent=`No generated NADOCast package is available for ${currentWfo}.`;});return c;}
+    async function manifest(cwa){
+      if(!manifestCache.has(cwa)){
+        manifestCache.set(cwa,fetch(`nadocast/${cwa}/latest.json?t=${Date.now()}`,{cache:'no-store'})
+          .then(r=>{if(!r.ok)throw Error(r.status);return r.json();}));
+      }
+      return manifestCache.get(cwa);
+    }
+    const percent=value=>Number.isFinite(value)?`${value.toFixed(1)}%`:'n/a';
+    function nadocastCwaPanel(day){
+      const host=document.createElement('div'),loading=document.createElement('div');
+      loading.className='status';loading.textContent='Loading generated CWA maps…';host.append(loading);
+      const office=currentWfo;
+      manifest(office).then(data=>{
+        if(!host.isConnected)return;
+        loading.remove();
+        const products=data.products?.[`day${day}`]||{};
+        const defs=[['tornado','Tornado'],['wind_adj','Wind'],['hail','Hail']];
+        const available=defs.filter(([key])=>products[key]);
+        if(!available.length){
+          const msg=document.createElement('div');msg.className='missing';
+          msg.textContent=day===2?'No Day 2 period is available in the latest generated run.':
+            `No generated NADOCast package is available for ${office}.`;
+          host.append(msg);return;
+        }
+        const info=document.createElement('div');info.className='status';
+        info.textContent=`Generated ${data.generated_utc||'recently'} from ${data.run_label||'the latest run'}`;
+        host.append(info,tabbed(available.map(([key,label])=>{
+          const p=products[key],shown=image(`nadocast/${office}/${p.image}`,
+            `NADOCast ${label} for ${office}`,
+            `${p.run_date||''} ${(p.run_dir||'').toUpperCase()} | ${p.lead_label||''}`);
+          const stats=document.createElement('div');stats.className='stats';
+          stats.textContent=`CWA max ${percent(p.max_cwa)} | CWA mean ${percent(p.mean_cwa)} | Buffer max ${percent(p.max_buffer)}`;
+          shown.wrap.append(stats);
+          return {label,node:shown.wrap};
+        })));
+      }).catch(()=>{
+        if(!host.isConnected)return;
+        loading.className='missing';loading.textContent=`No generated NADOCast package is available for ${office}.`;
+      });
+      return host;
+    }
+    // These timings and D1/D2 lead windows match the reference HTML.
+    function getLatestNadoRun(){
+      const now=new Date(),m=now.getUTCHours()*60+now.getUTCMinutes();
+      const date=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()));
+      if(m>=21*60+30)return {init:'18z',date};
+      if(m>=15*60+45)return {init:'12z',date};
+      if(m>=3*60+30)return {init:'00z',date};
+      date.setUTCDate(date.getUTCDate()-1);
+      return {init:'18z',date};
+    }
+    function nadoUrl(date,init,day,threat){
+      const ds=ymd(date),ym=ds.slice(0,6);
+      const folder=init==='00z'?'t0z':`t${init}`;
+      const fileRun=init==='00z'?'t00z':`t${init}`;
+      const range=init==='12z'?(day===1?'f02-23':'f24-47'):init==='00z'?'f12-35':'f02-17';
+      const raw=`http://data.nadocast.com/${ym}/${ds}/${folder}/nadocast_2022_models_conus_${threat}_${ds}_${fileRun}_${range}.png`;
+      return 'https://api.allorigins.win/raw?url='+encodeURIComponent(raw);
+    }
+    function nadoDay1Frames(threat,run){
+      const frames=[];
+      const push=(date,init,day)=>frames.push({
+        src:nadoUrl(date,init,day,threat),
+        label:`NADOCast ${threat} D${day} · ${ymd(date)} ${init.toUpperCase()}`
+      });
+      push(run.date,run.init,1);
+      if(run.init==='18z')push(run.date,'12z',1);
+      if(run.init!=='00z')push(run.date,'00z',1);
+      const previous=new Date(run.date);previous.setUTCDate(previous.getUTCDate()-1);
+      push(previous,'12z',2);
+      return frames;
+    }
+    function nadocastConusPanel(day){
+      const host=document.createElement('div'),run=getLatestNadoRun();
+      if(day===2&&run.init!=='12z'){
+        const msg=document.createElement('div');msg.className='missing';
+        msg.textContent='The CONUS Day 2 image is shown during the 12Z NADOCast cycle.';
+        host.append(msg);return host;
+      }
+      const defs=[['tornado','Tornado'],['wind','Wind'],['hail','Hail']];
+      host.append(tabbed(defs.map(([threat,label])=>{
+        const frames=day===1?nadoDay1Frames(threat,run):[];
+        const source=frames.length?frames[0].src:nadoUrl(run.date,'12z',2,threat);
+        const shown=image(source,`NADOCast CONUS ${label} Day ${day}`,
+          frames.length?frames[0].label:`NADOCast ${label} D2 · ${ymd(run.date)} 12Z`);
+        if(frames.length)addTrend(shown.wrap,shown.img,frames,shown.label);
+        return {label,node:shown.wrap};
+      })));
+      const note=document.createElement('div');note.className='status-detail';
+      note.textContent='CONUS imagery is supplied through a third-party proxy and may occasionally be unavailable. The CWA maps are generated independently.';
+      host.append(note);
+      return host;
+    }
+    function nadocastCard(day){
+      const c=card(day===1?
+        '<a href="http://data.nadocast.com/viewer.html" target="_blank" rel="noopener">NADOCast Probabilities</a>':
+        'NADOCast Probabilities');
+      c.append(tabbed([
+        {label:'Local CWA',node:nadocastCwaPanel(day)},
+        {label:'CONUS + Trends',node:nadocastConusPanel(day)}
+      ]));
+      return c;
+    }
 
-    function build(){document.getElementById('officeTitle').textContent=`NWS ${offices[currentWfo]} (${currentWfo})`;const root=document.getElementById('dashboard');root.replaceChildren();const now=new Date(),today=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate())),yesterday=new Date(today);yesterday.setUTCDate(yesterday.getUTCDate()-1);for(let day=1;day<=7;day++){const section=document.createElement('section');section.className='day';const title=document.createElement('h2'),date=new Date(now);date.setDate(date.getDate()+day-1);title.textContent=`Day ${day} Forecast — ${date.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}`;const grid=document.createElement('div');grid.className='grid';grid.append(spcCard(day),csuCard(day,today,yesterday),nsslCard(day));if(day<=2)grid.append(nadocastCard(day));section.append(title,grid);root.append(section);}const long=document.createElement('section');long.className='day';long.innerHTML='<h2><a href="https://atlas.niu.edu/forecast/scp/" target="_blank" rel="noopener">Long-Range CFS Accumulated Supercell Composite</a></h2>';const lg=document.createElement('div');lg.className='grid';[2,3].forEach(week=>{const c=card(`CFS Week ${week} SCP`);c.append(image(`https://atlas.niu.edu/forecast/scp/cfs_week${week}.png`,`CFS Week ${week} SCP`,`Week ${week}`).wrap);lg.append(c);});long.append(lg);root.append(long);const links=document.createElement('section');links.className='links';links.innerHTML='<h2>Other Useful AI/ML Severe Weather Links</h2><div class="grid"><section class="card link-card"><div class="card-title">HRRR Neural Network</div><p>Interactive NCAR CAM and neural-network guidance.</p><a href="https://www2.mmm.ucar.edu/projects/ncar_ensemble/camviewer/" target="_blank" rel="noopener">Open viewer →</a></section><section class="card link-card"><div class="card-title">NCAR AI NWP Convective Hazards</div><p>Experimental AI-driven convective-hazard probabilities from NCAR.</p><a href="https://www2.mmm.ucar.edu/projects/ncar_ensemble/ainwp/" target="_blank" rel="noopener">Open viewer →</a></section></div>';root.append(links);}
 
-    document.addEventListener('click',event=>{if(event.target.tagName==='IMG'){event.target.classList.toggle('zoomed');document.body.classList.toggle('zoom-active',event.target.classList.contains('zoomed'));}else if(!event.target.closest('.trend,.tabs')){document.querySelectorAll('img.zoomed').forEach(img=>img.classList.remove('zoomed'));document.body.classList.remove('zoom-active');}});
-    document.addEventListener('keydown',event=>{if(event.key==='Escape'){document.querySelectorAll('img.zoomed').forEach(img=>img.classList.remove('zoomed'));document.body.classList.remove('zoom-active');}});
+        function build(){document.getElementById('officeTitle').textContent=`NWS ${offices[currentWfo]} (${currentWfo})`;const root=document.getElementById('dashboard');root.replaceChildren();const now=new Date(),today=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate())),yesterday=new Date(today);yesterday.setUTCDate(yesterday.getUTCDate()-1);for(let day=1;day<=7;day++){const section=document.createElement('section');section.className='day';const title=document.createElement('h2'),date=new Date(now);date.setDate(date.getDate()+day-1);title.textContent=`Day ${day} Forecast — ${date.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}`;const grid=document.createElement('div');grid.className='grid';grid.append(spcCard(day),csuCard(day,today,yesterday),nsslCard(day));if(day<=2)grid.append(nadocastCard(day));section.append(title,grid);root.append(section);}const long=document.createElement('section');long.className='day';long.innerHTML='<h2><a href="https://atlas.niu.edu/forecast/scp/" target="_blank" rel="noopener">Long-Range CFS Accumulated Supercell Composite</a></h2>';const lg=document.createElement('div');lg.className='grid';[2,3].forEach(week=>{const c=card(`CFS Week ${week} SCP`);c.append(image(`https://atlas.niu.edu/forecast/scp/cfs_week${week}.png`,`CFS Week ${week} SCP`,`Week ${week}`).wrap);lg.append(c);});long.append(lg);root.append(long);const links=document.createElement('section');links.className='links';links.innerHTML='<h2>Other Useful AI/ML Severe Weather Links</h2><div class="grid"><section class="card link-card"><div class="card-title">HRRR Neural Network</div><p>Interactive NCAR CAM and neural-network guidance.</p><a href="https://www2.mmm.ucar.edu/projects/ncar_ensemble/camviewer/" target="_blank" rel="noopener">Open viewer →</a></section><section class="card link-card"><div class="card-title">NCAR AI NWP Convective Hazards</div><p>Experimental AI-driven convective-hazard probabilities from NCAR.</p><a href="https://www2.mmm.ucar.edu/projects/ncar_ensemble/ainwp/" target="_blank" rel="noopener">Open viewer →</a></section></div>';root.append(links);}
+
+
+    document.addEventListener('click',event=>{
+      if(event.target.tagName==='IMG'){
+        const target=event.target,wasZoomed=target.classList.contains('zoomed');
+        document.querySelectorAll('img.zoomed').forEach(img=>img.classList.remove('zoomed'));
+        if(!wasZoomed)target.classList.add('zoomed');
+        document.body.classList.toggle('zoom-active',!wasZoomed);
+      }else if(!event.target.closest('.trend,.tabs')){
+        document.querySelectorAll('img.zoomed').forEach(img=>img.classList.remove('zoomed'));
+        document.body.classList.remove('zoom-active');
+      }
+    });
+    document.addEventListener('keydown',event=>{
+      if(event.key==='Escape'){
+        document.querySelectorAll('img.zoomed').forEach(img=>img.classList.remove('zoomed'));
+        document.body.classList.remove('zoom-active');return;
+      }
+      if(!document.body.classList.contains('zoom-active'))return;
+      const z=document.querySelector('img.zoomed'),state=z&&trendState.get(z);
+      if(!state)return;
+      if(event.key==='ArrowLeft'){state.stepOlder();event.preventDefault();}
+      if(event.key==='ArrowRight'){state.stepNewer();event.preventDefault();}
+    });
+    // Retry failed images every five seconds without rebuilding the dashboard.
+    setInterval(()=>{
+      for(const img of failedImages){
+        if(!img.isConnected){failedImages.delete(img);continue;}
+        if(retryInFlight.has(img))continue;
+        const attempted=img.src;
+        if(!attempted)continue;
+        const probe=new Image();retryInFlight.add(img);
+        const done=()=>retryInFlight.delete(img);
+        probe.onload=()=>{
+          if(img.isConnected&&img.src===attempted)img.src=probe.src;
+          done();
+        };
+        probe.onerror=done;
+        const url=new URL(attempted,location.href);
+        url.searchParams.set('t',String(Date.now()));
+        probe.src=url.href;
+      }
+    },5000);
     build();
     setInterval(()=>location.reload(),30*60*1000);
-  </script>
+
+
+      </script>
 </body>
 </html>
