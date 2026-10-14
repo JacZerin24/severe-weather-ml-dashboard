@@ -1,15 +1,15 @@
 # Severe Weather ML Dashboard
 
-Static GitHub Pages dashboard that combines SPC, CSU MLP, NSSL GEFS ML, long-range CFS guidance, locally generated CWA-specific NADOCast probability maps, and optional CONUS NADOCast archive imagery.
+Static GitHub Pages dashboard combining SPC, CSU MLP, NSSL GEFS ML v1.2, long-range CFS guidance, and locally generated CWA-specific NADOCast probability maps.
 
 ## How it works
 
-- `index.html` is the dashboard shown by GitHub Pages.
+- `index.html` is the dashboard shown by GitHub Pages; `nssl-v12.js` handles the browser-side NSSL v1.2 model imagery and fixed-valid-date trends.
 - `scripts/run_nadocast_cwa.py` downloads NADOCast GRIB2 files and creates CWA-centered PNG maps.
 - `scripts/build_site.py` builds the static site, runs the mapper for each configured office, and writes a small `latest.json` manifest that the dashboard reads.
 - `.github/workflows/deploy-pages.yml` rebuilds and deploys the site after pushes, manual runs, and three times daily after the normal NADOCast update windows.
 
-The dashboard defaults to generated NADOCast maps centered on the selected CWA, including CWA/buffer statistics and significant-severe hatching when the corresponding significant product is available. Switch the NADOCast **Local CWA / CONUS + Trends** tabs to view the reference dashboard's proxied CONUS forecast cycles, without losing the CWA-specific maps.
+NADOCast maps are generated and centered on the selected CWA, including CWA/buffer statistics, retained run trends, and significant-severe hatching where the data support it. The unreliable CONUS NADOCast proxy has been removed.
 
 ## Interactive dashboard controls
 
@@ -17,7 +17,9 @@ The dashboard defaults to generated NADOCast maps centered on the selected CWA, 
 - **NADOCast CWA trends** show up to four distinct saved model cycles per hazard and office. Run labels, actual lead windows, and CWA/buffer statistics change with each frame. Use **Prev / Next**, or **Left / Right Arrow** while zoomed. **Escape** closes zoom.
 - Trend images are preserved between scheduled deploys using a GitHub Actions cache restored before the map build and saved afterward. The first updated deployment will have one cycle; more accumulate as fresh cycles become available. Older or failed runs are never presented as new.
 - CSU MLP and NSSL replacement guidance are treated independently. CSU maintains valid-date-anchored forecast-cycle trends. SPC retains clickable hazard tabs.
-- **NSSL GEFS ML v1.2:** the former weather.gov/EAX mirrored PNGs have stopped updating. Until the official image service can be reliably fetched and its forecast initialization validated, the dashboard displays **source not automatically mirrored** rather than showing old imagery. The viewer can still work in a human browser, as observed October 14, 2026. A UTC-stamped source health check runs during each site build. NSSL's old viewer and SWERVE paths returned HTTP 410 to GitHub's runner on October 14, 2026; those responses describe **GitHub runner access**, not necessarily the status a human sees in Chrome. The dashboard links to the human-accessible NSSL viewer, while continuing to suppress stale PNG maps.
+- **NSSL GEFS ML v1.2:** the dashboard now loads `daily_ml2-2severe24_dayN.png` directly from NSSL's dated `images/forecast/YYYYMMDD/` directories, not the stale NWS/EAX image mirror. Day 1–7 panels show direct severe-probability shading with NSSL's separate grey map underlay and linework when those geographic assets can be resolved.
+- **NSSL fixed-valid-date trends:** For any dashboard Day N, the most recent 00Z initialization uses model Day N; one day earlier uses model Day N+1, and so on (up to eight forecast frames, respecting NSSL's Day 15 limit). This compares the **same valid date**, and labels actual initialization and lead. Prev/Next and zoomed Left/Right arrows skip unavailable runs rather than showing broken or misdated images.
+- **NSSL upstream limitations:** The original NSSL viewer may be accessible in Chrome even when the automated GitHub runner receives HTTP 410/TLS errors. NSSL images are therefore loaded by each visitor's browser, checked for successful loading, and are re-evaluated each 30-minute page reload. Map shading, basemap and outlines are separate PNG files; the UI tries the known NSSL basemap filenames through several image directories and warns if geographic context cannot load. If your browser cannot access NSSL, the panel displays an unavailable message with a link to the original viewer. Maps are not represented as current unless a date-specific image successfully loads.
 - The page retries missing remote images every five seconds and refreshes every 30 minutes.
 
 The historical CONUS NADOCast tabs and AllOrigins proxy have been removed because they frequently fail to load. The CWA products are generated from NADOCast GRIB2 input; original geographic context, meaningful probabilities and significant-severe overlays are retained.
