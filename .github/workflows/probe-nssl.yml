@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - .github/workflows/probe-nssl.yml
+      - scripts/probe_nssl_source.py
 
 permissions:
   contents: read
