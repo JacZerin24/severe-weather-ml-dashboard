@@ -49,6 +49,10 @@ jobs:
           miniforge-version: latest
           conda-remove-defaults: "true"
 
+      - name: Investigate official NSSL v1.2 image source (non-blocking)
+        shell: bash -el {0}
+        run: python scripts/probe_nssl_source.py
+
       - name: Build dashboard and CWA maps
         shell: bash -el {0}
         run: python scripts/build_site.py
