@@ -11,6 +11,7 @@ from html.parser import HTMLParser
 from urllib.parse import urljoin
 
 import requests
+import urllib3
 
 PAGE = "https://apps.nssl.noaa.gov/s2s-severe/forecast_gefs_ml.html"
 HEADERS = {"User-Agent": "SevereWeatherDashboard/1.0 NSSL source-discovery"}
@@ -35,7 +36,14 @@ class References(HTMLParser):
 
 def main():
     try:
-        resp = requests.get(PAGE, headers=HEADERS, timeout=15)
+        try:
+            resp = requests.get(PAGE, headers=HEADERS, timeout=15)
+            unverified = False
+        except requests.exceptions.SSLError:
+            print("NSSL HTTPS certificate chain failed verification. Diagnostic retry ONLY with unverified TLS.", flush=True)
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            resp = requests.get(PAGE, headers=HEADERS, timeout=15, verify=False)
+            unverified = True
         print(f"NSSL source probe: page HTTP {resp.status_code}, size {len(resp.content)}, url {resp.url}", flush=True)
         resp.raise_for_status()
         refs = References()
@@ -55,7 +63,7 @@ def main():
             if not any(token in url.lower() for token in ("gefs", "forecast", "s2s", "product", "map")):
                 continue
             try:
-                js = requests.get(url, headers=HEADERS, timeout=10)
+                js = requests.get(url, headers=HEADERS, timeout=10, verify=not unverified)
                 print(f"Script {url}: HTTP {js.status_code}, {len(js.content)} bytes", flush=True)
                 print("  matching snippets:", re.findall(r'.{0,90}(?:v1[_.]2|\\.png|\\.gif|gefs).{0,130}', js.text, re.I)[:8], flush=True)
             except requests.RequestException as err:
