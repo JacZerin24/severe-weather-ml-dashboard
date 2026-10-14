@@ -10,6 +10,22 @@ const match=html.match(/<script>([\s\S]*?)<\/script>/i);
 assert.ok(match,'Dashboard must contain its application script');
 const js=match[1];
 new vm.Script(js,{filename:'index.html (inline script)'});
+const resources=readFileSync(new URL('../resources.js',import.meta.url),'utf8');
+const styling=readFileSync(new URL('../dashboard.css',import.meta.url),'utf8');
+new vm.Script(resources,{filename:'resources.js'});
+const groups=new Function(resources+';return GUIDANCE_RESOURCES;')();
+const allLinks=groups.flatMap(group=>group.items);
+assert.equal(groups.length,3,'Three distinct forecast resource categories');
+assert.equal(allLinks.length,10,'Ten curated forecast guidance references');
+assert.equal(new Set(allLinks.map(item=>item.url)).size,allLinks.length,'Resource URLs are unique');
+assert.ok(allLinks.every(item=>item.name&&item.lab&&item.about&&item.tag&&
+  item.url.startsWith('https://')), 'Every resource has a verified HTTPS destination and description');
+assert.match(html,/href="dashboard\.css"/);
+assert.match(html,/src="resources\.js"/);
+assert.match(html,/class="site-header"/);
+assert.match(resources,/section.id='resources'/); // Resource index must be reachable via the header nav.
+assert.ok(styling.includes('.resource-grid')&&styling.includes('.header-content'),
+  'Responsive forecast-workstation and resource styles are included');
 const nssl=readFileSync(new URL('../nssl-v12.js',import.meta.url),'utf8');
 assert.match(html,/src="nssl-v12\.js"/);
 new vm.Script(nssl,{filename:'nssl-v12.js'});
