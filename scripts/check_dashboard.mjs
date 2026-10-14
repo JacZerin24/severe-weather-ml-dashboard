@@ -11,7 +11,7 @@ assert.ok(match,'Dashboard must contain its application script');
 const js=match[1];
 new vm.Script(js,{filename:'index.html (inline script)'});
 const nssl=readFileSync(new URL('../nssl-v12.js',import.meta.url),'utf8');
-assert.match(html,/src="nssl-v12\\.js"/);
+assert.match(html,/src="nssl-v12\.js"/);
 new vm.Script(nssl,{filename:'nssl-v12.js'});
 
 const nsslHelpers=nssl.slice(nssl.indexOf('function nsslUtcDay('), nssl.indexOf('function nsslProbe('));
@@ -22,12 +22,12 @@ function ymdForTest(d){
 const initDate=new Date(Date.UTC(2026,9,14));
 const fixedDay1=nsslFns.nsslFrames(1,initDate);
 assert.equal(fixedDay1.length,8);
-assert.match(fixedDay1[0].src,/20261014\\/daily_ml2-2severe24_day1\\.png/);
-assert.match(fixedDay1[1].src,/20261013\\/daily_ml2-2severe24_day2\\.png/);
+assert.match(fixedDay1[0].src,/20261014\/daily_ml2-2severe24_day1\.png/);
+assert.match(fixedDay1[1].src,/20261013\/daily_ml2-2severe24_day2\.png/);
 assert.ok(fixedDay1.every(frame=>frame.valid==='20261014'));
 const fixedDay7=nsslFns.nsslFrames(7,initDate);
 assert.equal(fixedDay7.length,8);
-assert.match(fixedDay7[7].src,/daily_ml2-2severe24_day14\\.png/);
+assert.match(fixedDay7[7].src,/daily_ml2-2severe24_day14\.png/);
 assert.ok(fixedDay7.every(frame=>frame.valid==='20261020'));
 
 
