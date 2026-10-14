@@ -60,5 +60,9 @@ assert.ok(!js.includes('api.allorigins.win'), 'Unreliable CONUS proxy must not b
 assert.ok(!js.includes('nssl_combined_day')&&!nssl.includes('nssl_combined_day'), 'Stale NSSL mirrored images must not be used');
 assert.match(nssl,/function nsslCard\(/);
 assert.match(nssl,/basemap_greys_underlay_lcc\.png/);
+assert.match(nssl,/images\/static_overlays\/basemap_lcc\.png/);
+assert.match(nssl,/images\/static_underlays\/basemap_greys_underlay_lcc\.png/);
+assert.ok(!nssl.includes('nsslFindAsset('), 'Do not guess NSSL basemap directories');
+assert.match(html,/\.nssl-map \.nssl-lines \{z-index:3;mix-blend-mode:multiply;\}/);
 assert.match(nssl,/daily_ml2-2severe24_day/);
 console.log('Dashboard regression checks passed (NSSL URLs, fixed valid dates, map layers, CSU/CWA trends).');

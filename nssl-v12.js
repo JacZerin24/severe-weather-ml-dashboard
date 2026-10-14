@@ -6,7 +6,8 @@ const NSSL_ROOT='https://apps.nssl.noaa.gov/s2s-severe/';
 const NSSL_VIEWER=NSSL_ROOT+'forecast_gefs_ml.html';
 const NSSL_MAX_DAY=15;
 const NSSL_HISTORY=8;
-const nsslAssetCache=new Map();
+const NSSL_BASEMAP_LINES=NSSL_ROOT+'images/static_overlays/basemap_lcc.png';
+const NSSL_BASEMAP_GREY=NSSL_ROOT+'images/static_underlays/basemap_greys_underlay_lcc.png';
 const nsslProbeCache=new Map();
 
 function nsslUtcDay(date,offset=0){
@@ -46,22 +47,9 @@ function nsslProbe(url){
   nsslProbeCache.set(url,promise);
   return promise;
 }
-// The official viewer screenshots expose basemap filenames but not their paths.
-// Probe plausible official static directories and share results between cards.
-function nsslFindAsset(name){
-  if(nsslAssetCache.has(name))return nsslAssetCache.get(name);
-  const dirs=['images/','images/basemaps/','images/basemap/','images/map/',
-    'images/static/','images/forecast/','images/backgrounds/',''];
-  const promise=(async()=>{
-    for(const folder of dirs){
-      const src=NSSL_ROOT+folder+name;
-      if(await nsslProbe(src))return src;
-    }
-    return null;
-  })();
-  nsslAssetCache.set(name,promise);
-  return promise;
-}
+// The official viewer serves geography separately from dated forecast shading.
+// Use the real Lambert-Conformal map layers, not directory guesses.
+// If the optional grey underlay is unavailable, retain geographic outlines.
 function nsslCard(day){
   const c=card(day===1?
     '<a href="'+NSSL_VIEWER+'" target="_blank" rel="noopener">NSSL GEFS ML v1.2</a>':
@@ -150,13 +138,22 @@ function nsslCard(day){
     stepNewer(){if(index>0&&!loading)seek(index-1,-1);}
   });
   updateControls();
-  nsslFindAsset('basemap_greys_underlay_lcc.png').then(src=>{
+  // Overlay path confirmed from NSSL's original forecast viewer.
+  // Boundaries are deliberately composited above the shaded probability PNG.
+  nsslProbe(NSSL_BASEMAP_LINES).then(size=>{
     if(!c.isConnected)return;
-    if(src)underlay.src=src;
-    else mapAlert.textContent='NSSL basemap unavailable: probability shading may appear without geographic context.';
+    if(size){
+      outlines.src=NSSL_BASEMAP_LINES;
+      mapAlert.textContent='';
+    }else{
+      mapAlert.textContent='NSSL geographic outlines could not be loaded. Open the official viewer for geographic context.';
+    }
   });
-  nsslFindAsset('basemap_lcc.png').then(src=>{
-    if(c.isConnected&&src)outlines.src=src;
+  // This is a separate *underlay*, not the outline image.
+  nsslProbe(NSSL_BASEMAP_GREY).then(size=>{
+    if(!c.isConnected)return;
+    if(size)underlay.src=NSSL_BASEMAP_GREY;
+    // Keep the outline overlay usable even when the grey land/sea raster fails.
   });
   seek(0,1);
   function toggleZoom(){
