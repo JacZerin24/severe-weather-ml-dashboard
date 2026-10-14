@@ -30,6 +30,14 @@ jobs:
       - name: Check dashboard JavaScript and forecast-cycle calculations
         run: node scripts/check_dashboard.mjs
 
+      - name: Restore CWA forecast-cycle archive
+        uses: actions/cache/restore@v4
+        with:
+          path: archive/nadocast
+          key: nadocast-history-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            nadocast-history-
+
       - name: Set up conda environment
         uses: conda-incubator/setup-miniconda@v4
         with:
@@ -41,6 +49,12 @@ jobs:
       - name: Build dashboard and CWA maps
         shell: bash -el {0}
         run: python scripts/build_site.py
+
+      - name: Save CWA forecast-cycle archive
+        uses: actions/cache/save@v4
+        with:
+          path: archive/nadocast
+          key: nadocast-history-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
