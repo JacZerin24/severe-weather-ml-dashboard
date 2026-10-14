@@ -128,6 +128,7 @@ def main() -> int:
     site_dir.mkdir(parents=True)
     cache_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(root / "index.html", site_dir / "index.html")
+    shutil.copy2(root / "nssl-v12.js", site_dir / "nssl-v12.js")
     (site_dir / ".nojekyll").write_text("", encoding="utf-8")
     try:
         print(f"NSSL source health: {check_nssl_source(site_dir / 'nssl')}", flush=True)
