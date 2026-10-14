@@ -35,6 +35,20 @@
     .trend-label { min-width:70px; font-size:.76rem; color:var(--muted); font-variant-numeric:tabular-nums; }
     .image-wrap img[hidden],.image-wrap .missing[hidden] { display:none!important; }
     .status-detail { margin-top:9px; font-size:.74rem; color:var(--muted); line-height:1.4; }
+    .nssl-map {position:relative;width:100%;aspect-ratio:1.67;background:#eef2f5;overflow:hidden;border-radius:7px;cursor:zoom-in;}
+    .nssl-map img {position:absolute;inset:0;width:100%;height:100%;object-fit:fill;border-radius:0;background:transparent;pointer-events:none;}
+    .nssl-map .nssl-shading {z-index:2;}
+    .nssl-map .nssl-lines {z-index:3;}
+    .nssl-map .nssl-empty {position:absolute;z-index:4;inset:0;display:flex;align-items:center;justify-content:center;padding:12px;background:#ffffffa6;color:#303840;font-size:.83rem;}
+    .nssl-map .nssl-empty[hidden] {display:none;}
+    .nssl-map.zoomed {position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;
+      width:min(95vw,calc(90vh * var(--nssl-ratio, 1.67)));height:auto;max-height:90vh;box-shadow:0 0 40px #0009;cursor:zoom-out;}
+    .nssl-map.zoomed img {height:100%;max-height:none;}
+    .nssl-legend {height:9px;border-radius:2px;margin:9px 0 2px;background:linear-gradient(to right,#ffefaa,#ffb676,#f77557,#dc5362,#ad316e,#672067,#241035);}
+    .nssl-legend-labels {display:flex;justify-content:space-between;font-size:.64rem;color:var(--muted);}
+    .nssl-basemap-alert,.nssl-help {font-size:.74rem;color:var(--muted);margin-top:7px;line-height:1.35;}
+    .nssl-map:focus-visible {outline:3px solid #126bad;outline-offset:2px;}
+
     .links { max-width:1100px; margin:0 auto 40px; }
     .link-card { width:330px; text-align:left; }
     .link-card p { color:var(--muted); min-height:44px; }
@@ -56,6 +70,7 @@
     <div class="toolbar"><label for="wfo"><strong>Select WFO:</strong></label><select id="wfo"></select></div>
   </header>
   <main id="dashboard"></main>
+  <script src="nssl-v12.js"></script>
   <script>
     const offices={ABQ:'Albuquerque',ABR:'Aberdeen',AKQ:'Wakefield',ALY:'Albany',AMA:'Amarillo',APX:'Gaylord',ARX:'La Crosse',BGM:'Binghamton',BIS:'Bismarck',BMX:'Birmingham',BOI:'Boise',BOU:'Denver/Boulder',BOX:'Boston/Norton',BRO:'Brownsville',BTV:'Burlington',BUF:'Buffalo',BYZ:'Billings',CAE:'Columbia',CAR:'Caribou',CHS:'Charleston',CLE:'Cleveland',CRP:'Corpus Christi',CTP:'State College',CYS:'Cheyenne',DDC:'Dodge City',DLH:'Duluth',DMX:'Des Moines',DTX:'Detroit/Pontiac',DVN:'Davenport/Quad Cities',EAX:'Kansas City/Pleasant Hill',EKA:'Eureka',EPZ:'El Paso',EWX:'Austin/San Antonio',FFC:'Peachtree City/Atlanta',FGF:'Grand Forks',FGZ:'Flagstaff',FSD:'Sioux Falls',FWD:'Fort Worth/Dallas',GGW:'Glasgow',GID:'Hastings',GJT:'Grand Junction',GLD:'Goodland',GRB:'Green Bay',GRR:'Grand Rapids',GSP:'Greenville-Spartanburg',GYX:'Gray/Portland',HGX:'Houston/Galveston',HNX:'San Joaquin Valley/Hanford',HUN:'Huntsville',ICT:'Wichita',ILM:'Wilmington NC',ILN:'Wilmington OH',ILX:'Lincoln',IND:'Indianapolis',IWX:'Northern Indiana',JAN:'Jackson',JAX:'Jacksonville',JKL:'Jackson KY',KEY:'Key West',LBF:'North Platte',LCH:'Lake Charles',LIX:'New Orleans/Baton Rouge',LKN:'Elko',LMK:'Louisville',LOT:'Chicago',LOX:'Los Angeles/Oxnard',LSX:'St. Louis',LUB:'Lubbock',LWX:'Baltimore/Washington',LZK:'Little Rock',MAF:'Midland/Odessa',MEG:'Memphis',MFL:'Miami',MFR:'Medford',MHX:'Newport/Morehead City',MKX:'Milwaukee/Sullivan',MLB:'Melbourne',MOB:'Mobile/Pensacola',MPX:'Twin Cities',MQT:'Marquette',MRX:'Morristown/Knoxville',MSO:'Missoula',MTR:'San Francisco Bay Area/Monterey',OAX:'Omaha/Valley',OHX:'Nashville',OKX:'New York/Upton',OTX:'Spokane',OUN:'Norman',PAH:'Paducah',PBZ:'Pittsburgh',PDT:'Pendleton',PHI:'Mount Holly/Philadelphia',PIH:'Pocatello',PQR:'Portland',PSR:'Phoenix',PUB:'Pueblo',RAH:'Raleigh',REV:'Reno',RIW:'Riverton',RLX:'Charleston WV',RNK:'Blacksburg/Roanoke',SEW:'Seattle',SGF:'Springfield',SGX:'San Diego',SHV:'Shreveport',SJT:'San Angelo',SLC:'Salt Lake City',STO:'Sacramento',TAE:'Tallahassee',TBW:'Tampa',TFX:'Great Falls',TOP:'Topeka',TSA:'Tulsa',TWC:'Tucson',UNR:'Rapid City',VEF:'Las Vegas'};
     const queryWfo=new URLSearchParams(location.search).get('wfo')?.toUpperCase();
@@ -207,32 +222,7 @@
     }
 
 
-    const nsslSourceStatus=fetch('nssl/status.json?t='+Date.now(),{cache:'no-store'})
-      .then(r=>{if(!r.ok)throw Error(String(r.status));return r.json();})
-      .catch(()=>null);
-    function nsslCard(day){
-      const c=card('NSSL GEFS ML v1.2');
-      const info=document.createElement('div');info.className='status';
-      info.textContent='Open NSSL’s live interactive v1.2 forecast viewer';
-      const note=document.createElement('div');note.className='status-detail';
-      note.textContent='The v1.2 forecast shading is displayed as a separate browser-rendered layer. It appears in the official viewer, but cannot currently be mirrored automatically into this static dashboard. The old EAX PNGs remain excluded because they are stale.';
-      const checked=document.createElement('div');checked.className='status-detail';
-      checked.textContent='Automated source-access status (not a statement about availability in your browser).';
-      nsslSourceStatus.then(data=>{
-        if(!data||!c.isConnected)return;
-        const primary=data.source_status?.nssl_gefs_ml||{};
-        const code=primary.http_status?'HTTP '+primary.http_status:(primary.error||'unreachable');
-        checked.textContent='Automated GitHub runner check '+(data.checked_utc||'unknown time')+' · '+code+' · The viewer may still work in your browser.';
-      });
-      const link=document.createElement('a');
-      link.href='https://apps.nssl.noaa.gov/s2s-severe/forecast_gefs_ml.html';link.target='_blank';link.rel='noopener';
-      link.textContent='Open current NSSL GEFS ML v1.2 viewer →';
-      link.style.display='inline-block';link.style.marginTop='12px';
-      c.append(info,note,checked,link);
-      return c;
-    }
-
-        const manifestCache=new Map();
+    const manifestCache=new Map();
     async function manifest(cwa){
       if(!manifestCache.has(cwa)){
         manifestCache.set(cwa,fetch(`nadocast/${cwa}/latest.json?t=${Date.now()}`,{cache:'no-store'})
@@ -304,23 +294,24 @@
 
 
     document.addEventListener('click',event=>{
+      if(event.target.closest('.nssl-map'))return;
       if(event.target.tagName==='IMG'){
         const target=event.target,wasZoomed=target.classList.contains('zoomed');
-        document.querySelectorAll('img.zoomed').forEach(img=>img.classList.remove('zoomed'));
+        document.querySelectorAll('img.zoomed,.nssl-map.zoomed').forEach(img=>img.classList.remove('zoomed'));
         if(!wasZoomed)target.classList.add('zoomed');
         document.body.classList.toggle('zoom-active',!wasZoomed);
       }else if(!event.target.closest('.trend,.tabs')){
-        document.querySelectorAll('img.zoomed').forEach(img=>img.classList.remove('zoomed'));
+        document.querySelectorAll('img.zoomed,.nssl-map.zoomed').forEach(img=>img.classList.remove('zoomed'));
         document.body.classList.remove('zoom-active');
       }
     });
     document.addEventListener('keydown',event=>{
       if(event.key==='Escape'){
-        document.querySelectorAll('img.zoomed').forEach(img=>img.classList.remove('zoomed'));
+        document.querySelectorAll('img.zoomed,.nssl-map.zoomed').forEach(img=>img.classList.remove('zoomed'));
         document.body.classList.remove('zoom-active');return;
       }
       if(!document.body.classList.contains('zoom-active'))return;
-      const z=document.querySelector('img.zoomed'),state=z&&trendState.get(z);
+      const z=document.querySelector('img.zoomed')||document.querySelector('.nssl-map.zoomed .nssl-shading'),state=z&&trendState.get(z);
       if(!state)return;
       if(event.key==='ArrowLeft'){state.stepOlder();event.preventDefault();}
       if(event.key==='ArrowRight'){state.stepNewer();event.preventDefault();}
