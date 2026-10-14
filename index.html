@@ -208,17 +208,161 @@
 
         function nsslCard(day){const c=card(day===1?'<a href="https://apps.nssl.noaa.gov/s2s-severe/forecast_gefs_ml.html" target="_blank" rel="noopener">NSSL GEFS ML</a>':'NSSL GEFS ML'),shown=image('',`NSSL Day ${day}`,'');c.append(shown.wrap);const max=day>=4?11-day:7,frames=[];for(let i=0;i<=max;i++)frames.push({src:`https://www.weather.gov/images/eax/mlconv/nssl_combined_day${day}_${i}.png`,label:`NSSL Day ${day} — Frame ${i}`});addTrend(c,shown.img,frames,shown.wrap.querySelector('.label'));return c;}
 
+
     const manifestCache=new Map();
-    async function manifest(cwa){if(!manifestCache.has(cwa))manifestCache.set(cwa,fetch(`nadocast/${cwa}/latest.json?t=${Date.now()}`,{cache:'no-store'}).then(r=>{if(!r.ok)throw Error(r.status);return r.json();}));return manifestCache.get(cwa);}
-    function percent(value){return Number.isFinite(value)?`${value.toFixed(1)}%`:'n/a';}
-    function nadocastCard(day){const c=card(day===1?'<a href="http://data.nadocast.com/viewer.html" target="_blank" rel="noopener">NADOCast CWA Probabilities</a>':'NADOCast CWA Probabilities'),loading=document.createElement('div');loading.className='status';loading.textContent='Loading generated CWA maps…';c.append(loading);manifest(currentWfo).then(data=>{if(!c.isConnected)return;loading.remove();const products=data.products?.[`day${day}`]||{},defs=[['tornado','Tornado'],['wind_adj','Wind'],['hail','Hail']],available=defs.filter(([key])=>products[key]);if(!available.length){const m=document.createElement('div');m.className='missing';m.textContent=day===2?'No Day 2 period is available in the latest generated run.':`No generated NADOCast package is available for ${currentWfo}. Add the office to config/cwas.txt and run the workflow.`;c.append(m);return;}const s=document.createElement('div');s.className='status';s.textContent=`Generated ${data.generated_utc||'recently'} from ${data.run_label||'the latest run'}`;c.append(s);c.append(tabbed(available.map(([key,label])=>{const p=products[key],shown=image(`nadocast/${currentWfo}/${p.image}`,`NADOCast ${label} for ${currentWfo}`,`${p.run_date||''} ${(p.run_dir||'').toUpperCase()} | ${p.lead_label||''}`);const stats=document.createElement('div');stats.className='stats';stats.textContent=`CWA max ${percent(p.max_cwa)} | CWA mean ${percent(p.mean_cwa)} | Buffer max ${percent(p.max_buffer)}`;shown.wrap.append(stats);return {label,node:shown.wrap};})));}).catch(()=>{if(!c.isConnected)return;loading.className='missing';loading.textContent=`No generated NADOCast package is available for ${currentWfo}.`;});return c;}
+    async function manifest(cwa){
+      if(!manifestCache.has(cwa)){
+        manifestCache.set(cwa,fetch(`nadocast/${cwa}/latest.json?t=${Date.now()}`,{cache:'no-store'})
+          .then(r=>{if(!r.ok)throw Error(r.status);return r.json();}));
+      }
+      return manifestCache.get(cwa);
+    }
+    const percent=value=>Number.isFinite(value)?`${value.toFixed(1)}%`:'n/a';
+    function nadocastCwaPanel(day){
+      const host=document.createElement('div'),loading=document.createElement('div');
+      loading.className='status';loading.textContent='Loading generated CWA maps…';host.append(loading);
+      const office=currentWfo;
+      manifest(office).then(data=>{
+        if(!host.isConnected)return;
+        loading.remove();
+        const products=data.products?.[`day${day}`]||{};
+        const defs=[['tornado','Tornado'],['wind_adj','Wind'],['hail','Hail']];
+        const available=defs.filter(([key])=>products[key]);
+        if(!available.length){
+          const msg=document.createElement('div');msg.className='missing';
+          msg.textContent=day===2?'No Day 2 period is available in the latest generated run.':
+            `No generated NADOCast package is available for ${office}.`;
+          host.append(msg);return;
+        }
+        const info=document.createElement('div');info.className='status';
+        info.textContent=`Generated ${data.generated_utc||'recently'} from ${data.run_label||'the latest run'}`;
+        host.append(info,tabbed(available.map(([key,label])=>{
+          const p=products[key],shown=image(`nadocast/${office}/${p.image}`,
+            `NADOCast ${label} for ${office}`,
+            `${p.run_date||''} ${(p.run_dir||'').toUpperCase()} | ${p.lead_label||''}`);
+          const stats=document.createElement('div');stats.className='stats';
+          stats.textContent=`CWA max ${percent(p.max_cwa)} | CWA mean ${percent(p.mean_cwa)} | Buffer max ${percent(p.max_buffer)}`;
+          shown.wrap.append(stats);
+          return {label,node:shown.wrap};
+        })));
+      }).catch(()=>{
+        if(!host.isConnected)return;
+        loading.className='missing';loading.textContent=`No generated NADOCast package is available for ${office}.`;
+      });
+      return host;
+    }
+    // These timings and D1/D2 lead windows match the reference HTML.
+    function getLatestNadoRun(){
+      const now=new Date(),m=now.getUTCHours()*60+now.getUTCMinutes();
+      const date=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()));
+      if(m>=21*60+30)return {init:'18z',date};
+      if(m>=15*60+45)return {init:'12z',date};
+      if(m>=3*60+30)return {init:'00z',date};
+      date.setUTCDate(date.getUTCDate()-1);
+      return {init:'18z',date};
+    }
+    function nadoUrl(date,init,day,threat){
+      const ds=ymd(date),ym=ds.slice(0,6);
+      const folder=init==='00z'?'t0z':`t${init}`;
+      const fileRun=init==='00z'?'t00z':`t${init}`;
+      const range=init==='12z'?(day===1?'f02-23':'f24-47'):init==='00z'?'f12-35':'f02-17';
+      const raw=`http://data.nadocast.com/${ym}/${ds}/${folder}/nadocast_2022_models_conus_${threat}_${ds}_${fileRun}_${range}.png`;
+      return 'https://api.allorigins.win/raw?url='+encodeURIComponent(raw);
+    }
+    function nadoDay1Frames(threat,run){
+      const frames=[];
+      const push=(date,init,day)=>frames.push({
+        src:nadoUrl(date,init,day,threat),
+        label:`NADOCast ${threat} D${day} · ${ymd(date)} ${init.toUpperCase()}`
+      });
+      push(run.date,run.init,1);
+      if(run.init==='18z')push(run.date,'12z',1);
+      if(run.init!=='00z')push(run.date,'00z',1);
+      const previous=new Date(run.date);previous.setUTCDate(previous.getUTCDate()-1);
+      push(previous,'12z',2);
+      return frames;
+    }
+    function nadocastConusPanel(day){
+      const host=document.createElement('div'),run=getLatestNadoRun();
+      if(day===2&&run.init!=='12z'){
+        const msg=document.createElement('div');msg.className='missing';
+        msg.textContent='The CONUS Day 2 image is shown during the 12Z NADOCast cycle.';
+        host.append(msg);return host;
+      }
+      const defs=[['tornado','Tornado'],['wind','Wind'],['hail','Hail']];
+      host.append(tabbed(defs.map(([threat,label])=>{
+        const frames=day===1?nadoDay1Frames(threat,run):[];
+        const source=frames.length?frames[0].src:nadoUrl(run.date,'12z',2,threat);
+        const shown=image(source,`NADOCast CONUS ${label} Day ${day}`,
+          frames.length?frames[0].label:`NADOCast ${label} D2 · ${ymd(run.date)} 12Z`);
+        if(frames.length)addTrend(shown.wrap,shown.img,frames,shown.label);
+        return {label,node:shown.wrap};
+      })));
+      const note=document.createElement('div');note.className='status-detail';
+      note.textContent='CONUS imagery is supplied through a third-party proxy and may occasionally be unavailable. The CWA maps are generated independently.';
+      host.append(note);
+      return host;
+    }
+    function nadocastCard(day){
+      const c=card(day===1?
+        '<a href="http://data.nadocast.com/viewer.html" target="_blank" rel="noopener">NADOCast Probabilities</a>':
+        'NADOCast Probabilities');
+      c.append(tabbed([
+        {label:'Local CWA',node:nadocastCwaPanel(day)},
+        {label:'CONUS + Trends',node:nadocastConusPanel(day)}
+      ]));
+      return c;
+    }
 
-    function build(){document.getElementById('officeTitle').textContent=`NWS ${offices[currentWfo]} (${currentWfo})`;const root=document.getElementById('dashboard');root.replaceChildren();const now=new Date(),today=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate())),yesterday=new Date(today);yesterday.setUTCDate(yesterday.getUTCDate()-1);for(let day=1;day<=7;day++){const section=document.createElement('section');section.className='day';const title=document.createElement('h2'),date=new Date(now);date.setDate(date.getDate()+day-1);title.textContent=`Day ${day} Forecast — ${date.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}`;const grid=document.createElement('div');grid.className='grid';grid.append(spcCard(day),csuCard(day,today,yesterday),nsslCard(day));if(day<=2)grid.append(nadocastCard(day));section.append(title,grid);root.append(section);}const long=document.createElement('section');long.className='day';long.innerHTML='<h2><a href="https://atlas.niu.edu/forecast/scp/" target="_blank" rel="noopener">Long-Range CFS Accumulated Supercell Composite</a></h2>';const lg=document.createElement('div');lg.className='grid';[2,3].forEach(week=>{const c=card(`CFS Week ${week} SCP`);c.append(image(`https://atlas.niu.edu/forecast/scp/cfs_week${week}.png`,`CFS Week ${week} SCP`,`Week ${week}`).wrap);lg.append(c);});long.append(lg);root.append(long);const links=document.createElement('section');links.className='links';links.innerHTML='<h2>Other Useful AI/ML Severe Weather Links</h2><div class="grid"><section class="card link-card"><div class="card-title">HRRR Neural Network</div><p>Interactive NCAR CAM and neural-network guidance.</p><a href="https://www2.mmm.ucar.edu/projects/ncar_ensemble/camviewer/" target="_blank" rel="noopener">Open viewer →</a></section><section class="card link-card"><div class="card-title">NCAR AI NWP Convective Hazards</div><p>Experimental AI-driven convective-hazard probabilities from NCAR.</p><a href="https://www2.mmm.ucar.edu/projects/ncar_ensemble/ainwp/" target="_blank" rel="noopener">Open viewer →</a></section></div>';root.append(links);}
 
-    document.addEventListener('click',event=>{if(event.target.tagName==='IMG'){event.target.classList.toggle('zoomed');document.body.classList.toggle('zoom-active',event.target.classList.contains('zoomed'));}else if(!event.target.closest('.trend,.tabs')){document.querySelectorAll('img.zoomed').forEach(img=>img.classList.remove('zoomed'));document.body.classList.remove('zoom-active');}});
-    document.addEventListener('keydown',event=>{if(event.key==='Escape'){document.querySelectorAll('img.zoomed').forEach(img=>img.classList.remove('zoomed'));document.body.classList.remove('zoom-active');}});
+        function build(){document.getElementById('officeTitle').textContent=`NWS ${offices[currentWfo]} (${currentWfo})`;const root=document.getElementById('dashboard');root.replaceChildren();const now=new Date(),today=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate())),yesterday=new Date(today);yesterday.setUTCDate(yesterday.getUTCDate()-1);for(let day=1;day<=7;day++){const section=document.createElement('section');section.className='day';const title=document.createElement('h2'),date=new Date(now);date.setDate(date.getDate()+day-1);title.textContent=`Day ${day} Forecast — ${date.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}`;const grid=document.createElement('div');grid.className='grid';grid.append(spcCard(day),csuCard(day,today,yesterday),nsslCard(day));if(day<=2)grid.append(nadocastCard(day));section.append(title,grid);root.append(section);}const long=document.createElement('section');long.className='day';long.innerHTML='<h2><a href="https://atlas.niu.edu/forecast/scp/" target="_blank" rel="noopener">Long-Range CFS Accumulated Supercell Composite</a></h2>';const lg=document.createElement('div');lg.className='grid';[2,3].forEach(week=>{const c=card(`CFS Week ${week} SCP`);c.append(image(`https://atlas.niu.edu/forecast/scp/cfs_week${week}.png`,`CFS Week ${week} SCP`,`Week ${week}`).wrap);lg.append(c);});long.append(lg);root.append(long);const links=document.createElement('section');links.className='links';links.innerHTML='<h2>Other Useful AI/ML Severe Weather Links</h2><div class="grid"><section class="card link-card"><div class="card-title">HRRR Neural Network</div><p>Interactive NCAR CAM and neural-network guidance.</p><a href="https://www2.mmm.ucar.edu/projects/ncar_ensemble/camviewer/" target="_blank" rel="noopener">Open viewer →</a></section><section class="card link-card"><div class="card-title">NCAR AI NWP Convective Hazards</div><p>Experimental AI-driven convective-hazard probabilities from NCAR.</p><a href="https://www2.mmm.ucar.edu/projects/ncar_ensemble/ainwp/" target="_blank" rel="noopener">Open viewer →</a></section></div>';root.append(links);}
+
+
+    document.addEventListener('click',event=>{
+      if(event.target.tagName==='IMG'){
+        const target=event.target,wasZoomed=target.classList.contains('zoomed');
+        document.querySelectorAll('img.zoomed').forEach(img=>img.classList.remove('zoomed'));
+        if(!wasZoomed)target.classList.add('zoomed');
+        document.body.classList.toggle('zoom-active',!wasZoomed);
+      }else if(!event.target.closest('.trend,.tabs')){
+        document.querySelectorAll('img.zoomed').forEach(img=>img.classList.remove('zoomed'));
+        document.body.classList.remove('zoom-active');
+      }
+    });
+    document.addEventListener('keydown',event=>{
+      if(event.key==='Escape'){
+        document.querySelectorAll('img.zoomed').forEach(img=>img.classList.remove('zoomed'));
+        document.body.classList.remove('zoom-active');return;
+      }
+      if(!document.body.classList.contains('zoom-active'))return;
+      const z=document.querySelector('img.zoomed'),state=z&&trendState.get(z);
+      if(!state)return;
+      if(event.key==='ArrowLeft'){state.stepOlder();event.preventDefault();}
+      if(event.key==='ArrowRight'){state.stepNewer();event.preventDefault();}
+    });
+    // Retry failed images every five seconds without rebuilding the dashboard.
+    setInterval(()=>{
+      for(const img of failedImages){
+        if(!img.isConnected){failedImages.delete(img);continue;}
+        if(retryInFlight.has(img))continue;
+        const attempted=img.src;
+        if(!attempted)continue;
+        const probe=new Image();retryInFlight.add(img);
+        const done=()=>retryInFlight.delete(img);
+        probe.onload=()=>{
+          if(img.isConnected&&img.src===attempted)img.src=probe.src;
+          done();
+        };
+        probe.onerror=done;
+        const url=new URL(attempted,location.href);
+        url.searchParams.set('t',String(Date.now()));
+        probe.src=url.href;
+      }
+    },5000);
     build();
     setInterval(()=>location.reload(),30*60*1000);
-  </script>
+
+
+      </script>
 </body>
 </html>
