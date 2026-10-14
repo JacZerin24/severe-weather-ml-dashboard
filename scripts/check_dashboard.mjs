@@ -10,6 +10,26 @@ const match=html.match(/<script>([\s\S]*?)<\/script>/i);
 assert.ok(match,'Dashboard must contain its application script');
 const js=match[1];
 new vm.Script(js,{filename:'index.html (inline script)'});
+const nssl=readFileSync(new URL('../nssl-v12.js',import.meta.url),'utf8');
+assert.match(html,/src="nssl-v12\\.js"/);
+new vm.Script(nssl,{filename:'nssl-v12.js'});
+
+const nsslHelpers=nssl.slice(nssl.indexOf('function nsslUtcDay('), nssl.indexOf('function nsslProbe('));
+const nsslFns=new Function('ymd',nsslHelpers+';return {nsslFrames,nsslImageUrl};')(ymdForTest);
+function ymdForTest(d){
+  return `${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}`;
+}
+const initDate=new Date(Date.UTC(2026,9,14));
+const fixedDay1=nsslFns.nsslFrames(1,initDate);
+assert.equal(fixedDay1.length,8);
+assert.match(fixedDay1[0].src,/20261014\\/daily_ml2-2severe24_day1\\.png/);
+assert.match(fixedDay1[1].src,/20261013\\/daily_ml2-2severe24_day2\\.png/);
+assert.ok(fixedDay1.every(frame=>frame.valid==='20261014'));
+const fixedDay7=nsslFns.nsslFrames(7,initDate);
+assert.equal(fixedDay7.length,8);
+assert.match(fixedDay7[7].src,/daily_ml2-2severe24_day14\\.png/);
+assert.ok(fixedDay7.every(frame=>frame.valid==='20261020'));
+
 
 function definition(from,to){
   const start=js.indexOf(from),end=js.indexOf(to,start+from.length);
@@ -31,11 +51,14 @@ assert.match(csuDay1[0].src,/2026101412/);
 
 
 for(const expected of ['function nadocastCwaPanel(', 'function addTrend(',
- 'function nsslCard(', 'function spcCard(', 'function build()',
+ 'function spcCard(', 'function build()',
  'stepOlder()', 'stepNewer()', 'retryInFlight', 'setInterval(()=>location.reload(),30*60*1000)',
- 'data.trends', 'NADOCast CWA Probabilities', 'NSSL GEFS ML v1.2']){
+ 'data.trends', 'NADOCast CWA Probabilities']){
   assert.ok(js.includes(expected),`Missing required dashboard feature: ${expected}`);
 }
 assert.ok(!js.includes('api.allorigins.win'), 'Unreliable CONUS proxy must not be used');
-assert.ok(!js.includes('nssl_combined_day'), 'Stale NSSL mirrored images must not be used');
-console.log('Dashboard regression checks passed (JS syntax, CSU valid dates, CWA trends, source freshness safeguards).');
+assert.ok(!js.includes('nssl_combined_day')&&!nssl.includes('nssl_combined_day'), 'Stale NSSL mirrored images must not be used');
+assert.match(nssl,/function nsslCard\(/);
+assert.match(nssl,/basemap_greys_underlay_lcc\.png/);
+assert.match(nssl,/daily_ml2-2severe24_day/);
+console.log('Dashboard regression checks passed (NSSL URLs, fixed valid dates, map layers, CSU/CWA trends).');
