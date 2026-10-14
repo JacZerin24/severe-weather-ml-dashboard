@@ -6,6 +6,8 @@ on:
     paths:
       - index.html
       - nssl-v12.js
+      - dashboard.css
+      - resources.js
       - scripts/check_dashboard.mjs
       - scripts/trend_history.py
       - tests/**

@@ -5,11 +5,24 @@ Static GitHub Pages dashboard combining SPC, CSU MLP, NSSL GEFS ML v1.2, long-ra
 ## How it works
 
 - `index.html` is the dashboard shown by GitHub Pages; `nssl-v12.js` handles the browser-side NSSL v1.2 model imagery and fixed-valid-date trends.
+- `dashboard.css` provides the compact, responsive forecast-workstation layout; `resources.js` builds the categorized external research index.
 - `scripts/run_nadocast_cwa.py` downloads NADOCast GRIB2 files and creates CWA-centered PNG maps.
 - `scripts/build_site.py` builds the static site, runs the mapper for each configured office, and writes a small `latest.json` manifest that the dashboard reads.
 - `.github/workflows/deploy-pages.yml` rebuilds and deploys the site after pushes, manual runs, and three times daily after the normal NADOCast update windows.
 
 NADOCast maps are generated and centered on the selected CWA, including CWA/buffer statistics, retained run trends, and significant-severe hatching where the data support it. The unreliable CONUS NADOCast proxy has been removed.
+
+## Interface and additional resources
+
+The forecast dashboard uses a subdued NOAA-inspired navy header, integrated office selector, anchor navigation for Days 1–7, an extended-range section, and responsive model cards. The presentation deliberately emphasizes forecast maps rather than decorative graphics. The main controls and imagery remain unchanged.
+
+A curated resource index at the bottom groups links by forecast utility rather than by organization:
+
+- **Convective hazard forecasting:** NCAR AI-NWP Day 1–8 guidance, NCAR HRRR neural-network hazards, and NOAA HRRRCast.
+- **Storm-scale and nowcasting:** CIMSS ProbSevere v3, LightningCast, NSSL cloud-based WoFS, and NSSL Probabilistic Hazard Information (PHI).
+- **Related workbenches:** NOAA DESI, CSU-MLP excessive-rainfall products, and WeatherNext/Weather Lab background guidance.
+
+All resources link to their original organizations and are described as experimental or access-limited when appropriate. This index is not an automated guarantee of current product availability; review source timestamps when using them.
 
 ## Interactive dashboard controls
 
