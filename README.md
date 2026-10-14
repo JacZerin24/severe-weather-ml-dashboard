@@ -13,15 +13,21 @@ The dashboard defaults to generated NADOCast maps centered on the selected CWA, 
 
 ## Interactive dashboard controls
 
-- Select a WFO to switch SPC partner outlooks and locally generated NADOCast panels; the selection remains in the `?wfo=` URL for sharing.
-- Hover or click SPC hazard tabs (categorical, tornado, wind, hail). NADOCast panels also have clickable hazard tabs.
-- CSU MLP Day 1–7 cards and NSSL GEFS ML Day 1–7 cards have **Prev / Next** trend controls. CSU trends remain anchored to the **valid date of the image that actually loaded**, including when the default run falls back.
-- The **CONUS + Trends** NADOCast Day 1 panel shows recent tornado, wind, and hail forecast cycles. Its Day 2 image appears when the 12Z product window is selected; the generated local Day 2 CWA map is still shown whenever it is available.
-- Click any forecast image to enlarge it. When a trend image is enlarged, **Left Arrow** shows an older frame, **Right Arrow** a newer frame, and **Escape** closes it.
-- Failed remote forecast images are rechecked every five seconds. The page automatically refreshes every 30 minutes.
-- The CONUS image service uses `api.allorigins.win` to proxy HTTP images from `data.nadocast.com`; that third-party proxy or the archive may be unavailable. This does **not** block locally generated CWA imagery.
+- Select any WFO to view its SPC outlooks and the locally generated CWA NADOCast tornado, wind, and hail probabilities.
+- **NADOCast CWA trends** show up to four distinct saved model cycles per hazard and office. Run labels, actual lead windows, and CWA/buffer statistics change with each frame. Use **Prev / Next**, or **Left / Right Arrow** while zoomed. **Escape** closes zoom.
+- Trend images are preserved between scheduled deploys using a GitHub Actions cache restored before the map build and saved afterward. The first updated deployment will have one cycle; more accumulate as fresh cycles become available. Older or failed runs are never presented as new.
+- CSU MLP and NSSL replacement guidance are treated independently. CSU maintains valid-date-anchored forecast-cycle trends. SPC retains clickable hazard tabs.
+- **NSSL GEFS ML v1.2:** the former weather.gov/EAX mirrored PNGs have stopped updating. Until the official image service can be reliably fetched and its forecast initialization validated, the dashboard links directly to the official NSSL v1.2 interactive viewer rather than presenting stale images as current. A nonblocking source diagnostic runs in GitHub Actions to determine a suitable new ingestion method.
+- The page retries missing remote images every five seconds and refreshes every 30 minutes.
 
-Run the dependency-free JavaScript regression check with `node scripts/check_dashboard.mjs`. GitHub Actions runs this before building and deploying the site.
+The historical CONUS NADOCast tabs and AllOrigins proxy have been removed because they frequently fail to load. The CWA products are generated from NADOCast GRIB2 input; original geographic context, meaningful probabilities and significant-severe overlays are retained.
+
+**Local checks:**
+
+```bash
+node scripts/check_dashboard.mjs
+python -m unittest discover -s tests -p 'test_*.py'
+```
 
 ## Enable the site
 

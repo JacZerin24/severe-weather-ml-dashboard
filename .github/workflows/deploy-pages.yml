@@ -30,6 +30,17 @@ jobs:
       - name: Check dashboard JavaScript and forecast-cycle calculations
         run: node scripts/check_dashboard.mjs
 
+      - name: Test local CWA history retention
+        run: python -m unittest discover -s tests -p 'test_*.py'
+
+      - name: Restore CWA forecast-cycle archive
+        uses: actions/cache/restore@v4
+        with:
+          path: archive/nadocast
+          key: nadocast-history-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            nadocast-history-
+
       - name: Set up conda environment
         uses: conda-incubator/setup-miniconda@v4
         with:
@@ -38,9 +49,19 @@ jobs:
           miniforge-version: latest
           conda-remove-defaults: "true"
 
+      - name: Investigate official NSSL v1.2 image source (non-blocking)
+        shell: bash -el {0}
+        run: python scripts/probe_nssl_source.py
+
       - name: Build dashboard and CWA maps
         shell: bash -el {0}
         run: python scripts/build_site.py
+
+      - name: Save CWA forecast-cycle archive
+        uses: actions/cache/save@v4
+        with:
+          path: archive/nadocast
+          key: nadocast-history-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5

@@ -114,7 +114,7 @@
       host.append(tabs,body);return host;
     }
     // Frames are newest-first; previous means older and next means newer.
-    function addTrend(container,img,frames,label){
+    function addTrend(container,img,frames,label,onChange){
       if(!frames.length||trendState.has(img))return;
       let idx=frames.findIndex(frame=>sameUrl(frame.src,img.currentSrc||img.src));
       if(idx<0)idx=0;
@@ -128,6 +128,7 @@
         const frame=frames[idx];
         if(!sameUrl(img.src,frame.src))img.src=frame.src;
         if(label)label.textContent=frame.label||'';
+        if(onChange)onChange(frame);
         tag.textContent=`Trend ${idx+1} / ${frames.length}`;
         prev.disabled=idx===frames.length-1;next.disabled=idx===0;
       };
@@ -206,7 +207,20 @@
     }
 
 
-        function nsslCard(day){const c=card(day===1?'<a href="https://apps.nssl.noaa.gov/s2s-severe/forecast_gefs_ml.html" target="_blank" rel="noopener">NSSL GEFS ML</a>':'NSSL GEFS ML'),shown=image('',`NSSL Day ${day}`,'');c.append(shown.wrap);const max=day>=4?11-day:7,frames=[];for(let i=0;i<=max;i++)frames.push({src:`https://www.weather.gov/images/eax/mlconv/nssl_combined_day${day}_${i}.png`,label:`NSSL Day ${day} — Frame ${i}`});addTrend(c,shown.img,frames,shown.wrap.querySelector('.label'));return c;}
+    function nsslCard(day){
+      const official='https://apps.nssl.noaa.gov/s2s-severe/forecast_gefs_ml.html';
+      const c=card(`<a href="${official}" target="_blank" rel="noopener">NSSL GEFS ML v1.2</a>`);
+      const info=document.createElement('div');info.className='status';
+      info.textContent='Official NSSL v1.2 viewer · 00Z GEFS';
+      const note=document.createElement('div');note.className='status-detail';
+      note.textContent='Previously mirrored images stopped updating. Use the authoritative NSSL viewer for current guidance; no stale image is shown as a new forecast.';
+      const link=document.createElement('a');
+      link.href=official;link.target='_blank';link.rel='noopener';
+      link.textContent=`Open current NSSL v1.2 guidance for Day ${day} →`;
+      link.style.display='inline-block';link.style.marginTop='12px';
+      c.append(info,note,link);
+      return c;
+    }
 
 
     const manifestCache=new Map();
@@ -218,99 +232,61 @@
       return manifestCache.get(cwa);
     }
     const percent=value=>Number.isFinite(value)?`${value.toFixed(1)}%`:'n/a';
+
     function nadocastCwaPanel(day){
       const host=document.createElement('div'),loading=document.createElement('div');
-      loading.className='status';loading.textContent='Loading generated CWA maps…';host.append(loading);
+      loading.className='status';loading.textContent='Loading CWA forecast-cycle history…';host.append(loading);
       const office=currentWfo;
       manifest(office).then(data=>{
         if(!host.isConnected)return;
         loading.remove();
         const products=data.products?.[`day${day}`]||{};
+        const history=data.trends?.[`day${day}`]||{};
         const defs=[['tornado','Tornado'],['wind_adj','Wind'],['hail','Hail']];
-        const available=defs.filter(([key])=>products[key]);
+        const available=defs.filter(([key])=>products[key] || history[key]?.length);
         if(!available.length){
           const msg=document.createElement('div');msg.className='missing';
-          msg.textContent=day===2?'No Day 2 period is available in the latest generated run.':
+          msg.textContent=day===2?'No generated Day 2 NADOCast forecast cycles are available.':
             `No generated NADOCast package is available for ${office}.`;
           host.append(msg);return;
         }
         const info=document.createElement('div');info.className='status';
-        info.textContent=`Generated ${data.generated_utc||'recently'} from ${data.run_label||'the latest run'}`;
-        host.append(info,tabbed(available.map(([key,label])=>{
-          const p=products[key],shown=image(`nadocast/${office}/${p.image}`,
-            `NADOCast ${label} for ${office}`,
-            `${p.run_date||''} ${(p.run_dir||'').toUpperCase()} | ${p.lead_label||''}`);
+        info.textContent=`Last site build ${data.generated_utc||'unknown time'}; forecasts are labeled by actual model cycle.`;
+        host.append(info,tabbed(available.map(([key,name])=>{
+          const current=products[key];
+          const archived=history[key]||[];
+          const records=archived.length?archived:[current].filter(Boolean);
+          const frames=records.map(p=>({
+            src:`nadocast/${office}/${p.image}`,
+            label:`NADOCast ${name} · ${p.run_date} ${String(p.run_dir).toUpperCase()} · ${p.lead_label}`,
+            ...p
+          }));
+          const shown=image(frames[0].src,`NADOCast ${name} for ${office}`,frames[0].label);
           const stats=document.createElement('div');stats.className='stats';
-          stats.textContent=`CWA max ${percent(p.max_cwa)} | CWA mean ${percent(p.mean_cwa)} | Buffer max ${percent(p.max_buffer)}`;
+          const update=frame=>{
+            stats.textContent=`CWA max ${percent(frame.max_cwa)} | CWA mean ${percent(frame.mean_cwa)} | Buffer max ${percent(frame.max_buffer)}`;
+          };
           shown.wrap.append(stats);
-          return {label,node:shown.wrap};
+          update(frames[0]);
+          if(frames.length>1)addTrend(shown.wrap,shown.img,frames,shown.label,update);
+          else{
+            const note=document.createElement('div');note.className='status-detail';
+            note.textContent='One forecast cycle archived. Additional model cycles will populate as scheduled builds complete.';
+            shown.wrap.append(note);
+          }
+          return {label:name,node:shown.wrap};
         })));
       }).catch(()=>{
         if(!host.isConnected)return;
-        loading.className='missing';loading.textContent=`No generated NADOCast package is available for ${office}.`;
+        loading.className='missing';loading.textContent=`No generated NADOCast maps are available for ${office}.`;
       });
-      return host;
-    }
-    // These timings and D1/D2 lead windows match the reference HTML.
-    function getLatestNadoRun(){
-      const now=new Date(),m=now.getUTCHours()*60+now.getUTCMinutes();
-      const date=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()));
-      if(m>=21*60+30)return {init:'18z',date};
-      if(m>=15*60+45)return {init:'12z',date};
-      if(m>=3*60+30)return {init:'00z',date};
-      date.setUTCDate(date.getUTCDate()-1);
-      return {init:'18z',date};
-    }
-    function nadoUrl(date,init,day,threat){
-      const ds=ymd(date),ym=ds.slice(0,6);
-      const folder=init==='00z'?'t0z':`t${init}`;
-      const fileRun=init==='00z'?'t00z':`t${init}`;
-      const range=init==='12z'?(day===1?'f02-23':'f24-47'):init==='00z'?'f12-35':'f02-17';
-      const raw=`http://data.nadocast.com/${ym}/${ds}/${folder}/nadocast_2022_models_conus_${threat}_${ds}_${fileRun}_${range}.png`;
-      return 'https://api.allorigins.win/raw?url='+encodeURIComponent(raw);
-    }
-    function nadoDay1Frames(threat,run){
-      const frames=[];
-      const push=(date,init,day)=>frames.push({
-        src:nadoUrl(date,init,day,threat),
-        label:`NADOCast ${threat} D${day} · ${ymd(date)} ${init.toUpperCase()}`
-      });
-      push(run.date,run.init,1);
-      if(run.init==='18z')push(run.date,'12z',1);
-      if(run.init!=='00z')push(run.date,'00z',1);
-      const previous=new Date(run.date);previous.setUTCDate(previous.getUTCDate()-1);
-      push(previous,'12z',2);
-      return frames;
-    }
-    function nadocastConusPanel(day){
-      const host=document.createElement('div'),run=getLatestNadoRun();
-      if(day===2&&run.init!=='12z'){
-        const msg=document.createElement('div');msg.className='missing';
-        msg.textContent='The CONUS Day 2 image is shown during the 12Z NADOCast cycle.';
-        host.append(msg);return host;
-      }
-      const defs=[['tornado','Tornado'],['wind','Wind'],['hail','Hail']];
-      host.append(tabbed(defs.map(([threat,label])=>{
-        const frames=day===1?nadoDay1Frames(threat,run):[];
-        const source=frames.length?frames[0].src:nadoUrl(run.date,'12z',2,threat);
-        const shown=image(source,`NADOCast CONUS ${label} Day ${day}`,
-          frames.length?frames[0].label:`NADOCast ${label} D2 · ${ymd(run.date)} 12Z`);
-        if(frames.length)addTrend(shown.wrap,shown.img,frames,shown.label);
-        return {label,node:shown.wrap};
-      })));
-      const note=document.createElement('div');note.className='status-detail';
-      note.textContent='CONUS imagery is supplied through a third-party proxy and may occasionally be unavailable. The CWA maps are generated independently.';
-      host.append(note);
       return host;
     }
     function nadocastCard(day){
       const c=card(day===1?
-        '<a href="http://data.nadocast.com/viewer.html" target="_blank" rel="noopener">NADOCast Probabilities</a>':
-        'NADOCast Probabilities');
-      c.append(tabbed([
-        {label:'Local CWA',node:nadocastCwaPanel(day)},
-        {label:'CONUS + Trends',node:nadocastConusPanel(day)}
-      ]));
+        '<a href="http://data.nadocast.com/viewer.html" target="_blank" rel="noopener">NADOCast CWA Probabilities</a>':
+        'NADOCast CWA Probabilities');
+      c.append(nadocastCwaPanel(day));
       return c;
     }
 
