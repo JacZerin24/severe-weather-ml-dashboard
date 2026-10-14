@@ -181,7 +181,7 @@
         candidates.push({url:`${base}/severe_gefso_2021_day${day}/${early}/${filename}`,label:`Run ${early}`});
       }
       // Retain valid-date-preserving medium-range fallback from the existing dashboard.
-      const fallbackDay=day>=4?day+1:day;
+      const fallbackDay=day>=4&&day<7?day+1:day;
       const fallbackRun=`${ymd(yesterday)}${day<=3?'12':'00'}`,fallbackValid=validMmdd(yesterday,fallbackDay);
       const fallbackFilename=fallbackDay<=3?`severe_ml_day${fallbackDay}_all_gefso_${fallbackValid}.png`:`severe_ml_day${fallbackDay}_gefso_${fallbackValid}.png`;
       candidates.push({url:`${base}/severe_gefso_2021_day${fallbackDay}/${fallbackRun}/${fallbackFilename}`,
