@@ -58,19 +58,43 @@
     @media (prefers-color-scheme:dark) { :root { --card:#111820; --text:#edf2f6; --muted:#bac5ce; --line:#42505c; } body { background:#09121a; } select,button { background:#1a2630; color:#edf2f6; } .tab { background:#26343f; } .tab.active { background:#405362; } }
     @media (max-width:850px) { body{padding:10px}.logos{position:static;justify-content:center}.logos img{width:62px;height:62px}.card,.link-card{width:min(100%,430px)} }
   </style>
+  <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
-  <div class="logos">
-    <img src="https://www.noaa.gov/sites/default/files/2022-03/noaa_emblem_logo-2022.png" alt="NOAA logo">
-    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/ff/US-NationalWeatherService-Logo.svg/3840px-US-NationalWeatherService-Logo.svg.png" alt="NWS logo">
-  </div>
-  <header>
-    <h1>AI/ML Severe Weather Dashboard</h1>
-    <h2 id="officeTitle"></h2>
-    <div class="toolbar"><label for="wfo"><strong>Select WFO:</strong></label><select id="wfo"></select></div>
+  <header class="site-header" id="top">
+    <div class="header-band"><div class="header-band-inner">
+      <span class="header-eyebrow">Forecast Desk / Severe Weather</span>
+      <span class="header-right-note">Model guidance and research products</span>
+    </div></div>
+    <div class="header-content">
+      <div class="logos" aria-label="NOAA and National Weather Service">
+        <img src="https://www.noaa.gov/sites/default/files/2022-03/noaa_emblem_logo-2022.png" alt="NOAA" width="47" height="47">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/ff/US-NationalWeatherService-Logo.svg/3840px-US-NationalWeatherService-Logo.svg.png" alt="NWS" width="47" height="47">
+      </div>
+      <div class="header-title-block">
+        <h1>AI/ML Severe Weather Dashboard</h1>
+        <h2 id="officeTitle"></h2>
+      </div>
+      <div class="toolbar">
+        <label for="wfo">Forecast office</label>
+        <select id="wfo" aria-label="Select National Weather Service forecast office"></select>
+      </div>
+    </div>
+    <nav class="nav-band" aria-label="Dashboard sections"><div class="nav-band-inner">
+      <a href="#day-1">Day 1</a>
+      <a href="#day-2">Day 2</a>
+      <a href="#day-3">Days 3–7</a>
+      <a href="#long-range">Extended outlook</a>
+      <a href="#resources">Resource index</a>
+      <span class="nav-note">Page refreshes every 30 minutes</span>
+    </div></nav>
   </header>
   <main id="dashboard"></main>
+  <footer class="site-footer"><span>Independent compilation of severe-weather forecast guidance.</span>
+    <span>Verify valid times and data currency at the source. <a href="#top">Back to top ↑</a></span>
+  </footer>
   <script src="nssl-v12.js"></script>
+  <script src="resources.js"></script>
   <script>
     const offices={ABQ:'Albuquerque',ABR:'Aberdeen',AKQ:'Wakefield',ALY:'Albany',AMA:'Amarillo',APX:'Gaylord',ARX:'La Crosse',BGM:'Binghamton',BIS:'Bismarck',BMX:'Birmingham',BOI:'Boise',BOU:'Denver/Boulder',BOX:'Boston/Norton',BRO:'Brownsville',BTV:'Burlington',BUF:'Buffalo',BYZ:'Billings',CAE:'Columbia',CAR:'Caribou',CHS:'Charleston',CLE:'Cleveland',CRP:'Corpus Christi',CTP:'State College',CYS:'Cheyenne',DDC:'Dodge City',DLH:'Duluth',DMX:'Des Moines',DTX:'Detroit/Pontiac',DVN:'Davenport/Quad Cities',EAX:'Kansas City/Pleasant Hill',EKA:'Eureka',EPZ:'El Paso',EWX:'Austin/San Antonio',FFC:'Peachtree City/Atlanta',FGF:'Grand Forks',FGZ:'Flagstaff',FSD:'Sioux Falls',FWD:'Fort Worth/Dallas',GGW:'Glasgow',GID:'Hastings',GJT:'Grand Junction',GLD:'Goodland',GRB:'Green Bay',GRR:'Grand Rapids',GSP:'Greenville-Spartanburg',GYX:'Gray/Portland',HGX:'Houston/Galveston',HNX:'San Joaquin Valley/Hanford',HUN:'Huntsville',ICT:'Wichita',ILM:'Wilmington NC',ILN:'Wilmington OH',ILX:'Lincoln',IND:'Indianapolis',IWX:'Northern Indiana',JAN:'Jackson',JAX:'Jacksonville',JKL:'Jackson KY',KEY:'Key West',LBF:'North Platte',LCH:'Lake Charles',LIX:'New Orleans/Baton Rouge',LKN:'Elko',LMK:'Louisville',LOT:'Chicago',LOX:'Los Angeles/Oxnard',LSX:'St. Louis',LUB:'Lubbock',LWX:'Baltimore/Washington',LZK:'Little Rock',MAF:'Midland/Odessa',MEG:'Memphis',MFL:'Miami',MFR:'Medford',MHX:'Newport/Morehead City',MKX:'Milwaukee/Sullivan',MLB:'Melbourne',MOB:'Mobile/Pensacola',MPX:'Twin Cities',MQT:'Marquette',MRX:'Morristown/Knoxville',MSO:'Missoula',MTR:'San Francisco Bay Area/Monterey',OAX:'Omaha/Valley',OHX:'Nashville',OKX:'New York/Upton',OTX:'Spokane',OUN:'Norman',PAH:'Paducah',PBZ:'Pittsburgh',PDT:'Pendleton',PHI:'Mount Holly/Philadelphia',PIH:'Pocatello',PQR:'Portland',PSR:'Phoenix',PUB:'Pueblo',RAH:'Raleigh',REV:'Reno',RIW:'Riverton',RLX:'Charleston WV',RNK:'Blacksburg/Roanoke',SEW:'Seattle',SGF:'Springfield',SGX:'San Diego',SHV:'Shreveport',SJT:'San Angelo',SLC:'Salt Lake City',STO:'Sacramento',TAE:'Tallahassee',TBW:'Tampa',TFX:'Great Falls',TOP:'Topeka',TSA:'Tulsa',TWC:'Tucson',UNR:'Rapid City',VEF:'Las Vegas'};
     const queryWfo=new URLSearchParams(location.search).get('wfo')?.toUpperCase();
@@ -290,7 +314,68 @@
     }
 
 
-        function build(){document.getElementById('officeTitle').textContent=`NWS ${offices[currentWfo]} (${currentWfo})`;const root=document.getElementById('dashboard');root.replaceChildren();const now=new Date(),today=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate())),yesterday=new Date(today);yesterday.setUTCDate(yesterday.getUTCDate()-1);for(let day=1;day<=7;day++){const section=document.createElement('section');section.className='day';const title=document.createElement('h2'),date=new Date(now);date.setDate(date.getDate()+day-1);title.textContent=`Day ${day} Forecast — ${date.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}`;const grid=document.createElement('div');grid.className='grid';grid.append(spcCard(day),csuCard(day,today,yesterday),nsslCard(day));if(day<=2)grid.append(nadocastCard(day));section.append(title,grid);root.append(section);}const long=document.createElement('section');long.className='day';long.innerHTML='<h2><a href="https://atlas.niu.edu/forecast/scp/" target="_blank" rel="noopener">Long-Range CFS Accumulated Supercell Composite</a></h2>';const lg=document.createElement('div');lg.className='grid';[2,3].forEach(week=>{const c=card(`CFS Week ${week} SCP`);c.append(image(`https://atlas.niu.edu/forecast/scp/cfs_week${week}.png`,`CFS Week ${week} SCP`,`Week ${week}`).wrap);lg.append(c);});long.append(lg);root.append(long);const links=document.createElement('section');links.className='links';links.innerHTML='<h2>Other Useful AI/ML Severe Weather Links</h2><div class="grid"><section class="card link-card"><div class="card-title">HRRR Neural Network</div><p>Interactive NCAR CAM and neural-network guidance.</p><a href="https://www2.mmm.ucar.edu/projects/ncar_ensemble/camviewer/" target="_blank" rel="noopener">Open viewer →</a></section><section class="card link-card"><div class="card-title">NCAR AI NWP Convective Hazards</div><p>Experimental AI-driven convective-hazard probabilities from NCAR.</p><a href="https://www2.mmm.ucar.edu/projects/ncar_ensemble/ainwp/" target="_blank" rel="noopener">Open viewer →</a></section></div>';root.append(links);}
+        function build(){
+      document.getElementById('officeTitle').textContent='NWS '+offices[currentWfo]+' ('+currentWfo+')';
+      const root=document.getElementById('dashboard');
+      root.replaceChildren();
+      const now=new Date();
+      const today=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()));
+      const yesterday=new Date(today);
+      yesterday.setUTCDate(yesterday.getUTCDate()-1);
+      for(let day=1;day<=7;day++){
+        const section=document.createElement('section');
+        section.id='day-'+day;
+        section.className='day'+(day>=3?' day--extended':'');
+        const heading=document.createElement('div');
+        heading.className='section-heading';
+        const title=document.createElement('h2');
+        const validDate=new Date(today);
+        validDate.setUTCDate(validDate.getUTCDate()+day-1);
+        const formatted=validDate.toLocaleDateString('en-US',{
+          weekday:'long',month:'long',day:'numeric',timeZone:'UTC'
+        });
+        const tag=document.createElement('span');
+        tag.className='day-tag';
+        tag.textContent='D'+String(day).padStart(2,'0');
+        title.append(tag,document.createTextNode('Day '+day+' Forecast — '+formatted));
+        const note=document.createElement('span');
+        note.className='day-note';
+        note.textContent=day<=2?'SPC / CSU / NSSL / NADOCast':'SPC / CSU / NSSL';
+        heading.append(title,note);
+        const grid=document.createElement('div');
+        grid.className='grid';
+        grid.append(spcCard(day),csuCard(day,today,yesterday),nsslCard(day));
+        if(day<=2)grid.append(nadocastCard(day));
+        section.append(heading,grid);
+        root.append(section);
+      }
+      const long=document.createElement('section');
+      long.id='long-range';
+      long.className='day day--long';
+      const longHeader=document.createElement('div');
+      longHeader.className='section-heading';
+      const longTitle=document.createElement('h2');
+      const longLink=document.createElement('a');
+      longLink.href='https://atlas.niu.edu/forecast/scp/';
+      longLink.target='_blank';longLink.rel='noopener';
+      longLink.textContent='Long-Range CFS Supercell Composite';
+      longTitle.append(longLink);
+      const longNote=document.createElement('span');
+      longNote.className='day-note';
+      longNote.textContent='Weeks 2–3 / experimental';
+      longHeader.append(longTitle,longNote);
+      const grid=document.createElement('div');
+      grid.className='grid';
+      [2,3].forEach(week=>{
+        const c=card('CFS Week '+week+' SCP');
+        c.append(image('https://atlas.niu.edu/forecast/scp/cfs_week'+week+'.png',
+          'CFS Week '+week+' SCP','Week '+week).wrap);
+        grid.append(c);
+      });
+      long.append(longHeader,grid);
+      root.append(long);
+      root.append(buildResourceIndex());
+    }
 
 
     document.addEventListener('click',event=>{
