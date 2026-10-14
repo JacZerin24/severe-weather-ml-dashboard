@@ -14,7 +14,7 @@ from pathlib import Path
 
 HAZARDS = ("tornado", "wind_adj", "hail")
 DAYS = ("day1", "day2")
-RUN_HOURS = {"t0z": 0, "t00z": 0, "t12z": 12, "t18z": 18}
+RUN_HOURS = {"t0z": 0, "t00z": 0, "t10z": 10, "t12z": 12, "t14z": 14, "t18z": 18, "t20z": 20}
 
 
 def safe_filename(day: str, hazard: str, product: dict) -> str:
