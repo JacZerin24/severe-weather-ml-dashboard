@@ -29,18 +29,13 @@ const csuDay1=csu(1,'https://schumacher.atmos.colostate.edu/weather/csu_mlp/arch
 assert.equal(csuDay1.length,10,'Day 1 spans ten eligible runs');
 assert.match(csuDay1[0].src,/2026101412/);
 
-const nado=new Function('ymd',definition('function nadoUrl(','function nadocastConusPanel(')+'; return {nadoUrl,nadoDay1Frames};')(ymd);
-for(const [init,count] of [['18z',4],['12z',3],['00z',2]]){
-  const frames=nado.nadoDay1Frames('tornado',{date:today,init});
-  assert.equal(frames.length,count,`NADOCast ${init} trend count`);
-  assert.match(frames.at(-1).src,/f24-47/,'Historical Day 2 run should appear');
-}
-assert.match(nado.nadoUrl(today,'12z',2,'wind'),/f24-47/);
-assert.match(nado.nadoUrl(today,'00z',1,'hail'),/f12-35/);
 
-for(const expected of ['function nadocastCwaPanel(', 'function nadocastConusPanel(',
+for(const expected of ['function nadocastCwaPanel(', 'function addTrend(',
+ 'function nsslCard(', 'function spcCard(', 'function build()',
  'stepOlder()', 'stepNewer()', 'retryInFlight', 'setInterval(()=>location.reload(),30*60*1000)',
- 'function spcCard(', 'function nsslCard(', 'function build()']){
+ 'data.trends', 'NADOCast CWA Probabilities', 'NSSL GEFS ML v1.2']){
   assert.ok(js.includes(expected),`Missing required dashboard feature: ${expected}`);
 }
-console.log('Dashboard regression checks passed (JS syntax, CSU valid dates, NADOCast cycles, UI features).');
+assert.ok(!js.includes('api.allorigins.win'), 'Unreliable CONUS proxy must not be used');
+assert.ok(!js.includes('nssl_combined_day'), 'Stale NSSL mirrored images must not be used');
+console.log('Dashboard regression checks passed (JS syntax, CSU valid dates, CWA trends, source freshness safeguards).');
