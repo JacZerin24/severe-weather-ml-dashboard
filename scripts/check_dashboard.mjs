@@ -15,7 +15,7 @@ assert.match(html,/src="nssl-v12\\.js"/);
 new vm.Script(nssl,{filename:'nssl-v12.js'});
 
 const nsslHelpers=nssl.slice(nssl.indexOf('function nsslUtcDay('), nssl.indexOf('function nsslProbe('));
-const nsslFns=new Function('ymd',nsslHelpers+';return {nsslFrames,nsslImageUrl};')(ymdForTest);
+const nsslFns=new Function('ymd','NSSL_ROOT','NSSL_MAX_DAY','NSSL_HISTORY',nsslHelpers+';return {nsslFrames,nsslImageUrl};')(ymdForTest,'https://apps.nssl.noaa.gov/s2s-severe/',15,8);
 function ymdForTest(d){
   return `${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}`;
 }
