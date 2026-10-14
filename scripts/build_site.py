@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 from trend_history import update_cwa_trends
+from check_nssl_status import generate as check_nssl_source
 
 DISPLAY_HAZARDS = {"tornado", "wind_adj", "hail"}
 ALL_HAZARDS = ["tornado", "wind_adj", "hail", "sig_tornado", "sig_wind_adj", "sig_hail"]
@@ -128,6 +129,10 @@ def main() -> int:
     cache_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(root / "index.html", site_dir / "index.html")
     (site_dir / ".nojekyll").write_text("", encoding="utf-8")
+    try:
+        print(f"NSSL source health: {check_nssl_source(site_dir / 'nssl')}", flush=True)
+    except Exception as exc:
+        print(f"NSSL health check unavailable: {exc}", file=sys.stderr)
 
     statuses: list[dict] = []
     for cwa in cwas:
