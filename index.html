@@ -213,20 +213,20 @@
     function nsslCard(day){
       const c=card('NSSL GEFS ML v1.2');
       const info=document.createElement('div');info.className='status';
-      info.textContent='No verified current v1.2 imagery available';
+      info.textContent='Open NSSL’s live interactive v1.2 forecast viewer';
       const note=document.createElement('div');note.className='status-detail';
-      note.textContent='The former EAX mirrored maps stopped updating. The previously used NSSL viewer endpoint is also unavailable to the automated build. No historical image is being presented as a live forecast.';
+      note.textContent='The v1.2 forecast shading is displayed as a separate browser-rendered layer. It appears in the official viewer, but cannot currently be mirrored automatically into this static dashboard. The old EAX PNGs remain excluded because they are stale.';
       const checked=document.createElement('div');checked.className='status-detail';
-      checked.textContent='Source status is checked during each site build.';
+      checked.textContent='Automated source-access status (not a statement about availability in your browser).';
       nsslSourceStatus.then(data=>{
         if(!data||!c.isConnected)return;
         const primary=data.source_status?.nssl_gefs_ml||{};
         const code=primary.http_status?'HTTP '+primary.http_status:(primary.error||'unreachable');
-        checked.textContent='Last checked '+(data.checked_utc||'unknown time')+' · NSSL source: '+code+' · No validated model imagery';
+        checked.textContent='Automated GitHub runner check '+(data.checked_utc||'unknown time')+' · '+code+' · The viewer may still work in your browser.';
       });
       const link=document.createElement('a');
-      link.href='https://www.nssl.noaa.gov/';link.target='_blank';link.rel='noopener';
-      link.textContent='NSSL research website →';
+      link.href='https://apps.nssl.noaa.gov/s2s-severe/forecast_gefs_ml.html';link.target='_blank';link.rel='noopener';
+      link.textContent='Open current NSSL GEFS ML v1.2 viewer →';
       link.style.display='inline-block';link.style.marginTop='12px';
       c.append(info,note,checked,link);
       return c;
