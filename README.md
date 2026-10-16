@@ -18,11 +18,17 @@ The forecast dashboard uses a subdued NOAA-inspired navy header, integrated offi
 
 A curated resource index at the bottom groups links by forecast utility rather than by organization:
 
-- **Convective hazard forecasting:** NCAR AI-NWP Day 1–8 guidance, NCAR HRRR neural-network hazards, and NOAA HRRRCast.
+- **Convective hazard forecasting:** StormNet live risk viewer, NCAR AI-NWP Day 1–8 guidance, NCAR HRRR neural-network hazards, and NOAA HRRRCast.
 - **Storm-scale and nowcasting:** CIMSS ProbSevere v3, LightningCast, NSSL cloud-based WoFS, and NSSL Probabilistic Hazard Information (PHI).
 - **Related workbenches:** NOAA DESI, CSU-MLP excessive-rainfall products, and WeatherNext/Weather Lab background guidance.
 
 All resources link to their original organizations and are described as experimental or access-limited when appropriate. This index is not an automated guarantee of current product availability; review source timestamps when using them.
+
+## StormNet external viewer
+
+StormNet from OpenSnow is linked in three visible places: a compact live-guidance strip above Day 1, the main header navigation, and the curated reference index. These links open the [official StormNet viewer](https://stormnet.ai/stormnet) in a new tab for its lightning, hail, damaging wind, and tornado-risk maps. The live forecasts remain hosted by StormNet; the dashboard does not scrape, download, relay, or represent that data as a locally updated product.
+
+The public StormNet viewer is available for individual use. Embedding licensed StormNet probability layers or fixed-valid-time run trends alongside CSU/NSSL/NADOCast is **not included** in this release. Such a future integration requires the appropriate StormNet API authorization/redistribution terms, a time-validity mapping for each requested product, and visible “Powered by StormNet” attribution as specified by its API terms. See [StormNet API details](https://stormnet.ai/stormnet/api/start).
 
 ## Interactive dashboard controls
 
