@@ -296,7 +296,7 @@ def make_map(product: Product, grib_path: Path, overlay_path: Path | None, cwas,
     ax.set_ylabel("Latitude")
     validity = describe_product(product.run_date, product.run_dir, product.lead)
     ax.set_title(
-        f"NADOCast {LABELS.get(product.hazard, product.hazard)} Probability — {cwa} CWA\\n"
+        f"NADOCast {LABELS.get(product.hazard, product.hazard)} Probability — {cwa} CWA\n"
         f"Init {validity.init_utc} | Valid {validity.valid_start_utc} to "
         f"{validity.valid_end_utc} | Experimental", fontsize=12
     )
