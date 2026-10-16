@@ -360,9 +360,11 @@ def enhanced_make_map(product, grib_path, overlay_path, cwas, target, buffered, 
     ax.set_ylim(miny, maxy)
     ax.set_xlabel("Longitude")
     ax.set_ylabel("Latitude")
+    validity = base.describe_product(product.run_date, product.run_dir, product.lead)
     ax.set_title(
-        f"NADOCast {base.LABELS.get(product.hazard, product.hazard)} Probability — {cwa} CWA\n"
-        f"{product.run_date} {product.run_dir.upper()} | {product.lead} | Experimental guidance",
+        f"NADOCast {base.LABELS.get(product.hazard, product.hazard)} Probability — {cwa} CWA\\n"
+        f"Init {validity.init_utc} | Valid {validity.valid_start_utc} to "
+        f"{validity.valid_end_utc} | Experimental",
         fontsize=12,
     )
     colorbar = fig.colorbar(
