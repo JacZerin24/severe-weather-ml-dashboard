@@ -69,9 +69,10 @@ assert.match(csuDay1[0].src,/2026101412/);
 for(const expected of ['function nadocastCwaPanel(', 'function addTrend(',
  'function spcCard(', 'function build()',
  'stepOlder()', 'stepNewer()', 'retryInFlight', 'setInterval(()=>location.reload(),30*60*1000)',
- 'data.trends', 'NADOCast CWA Probabilities']){
+ 'data.trends_by_valid_date', 'data.valid_products', 'p.valid_date===validDate', 'NADOCast CWA Probabilities']){
   assert.ok(js.includes(expected),`Missing required dashboard feature: ${expected}`);
 }
+assert.ok(!js.includes("data.trends?.[\u0060day"),"Legacy day-indexed NADOCast trends must not be used");
 assert.ok(!js.includes('api.allorigins.win'), 'Unreliable CONUS proxy must not be used');
 assert.ok(!js.includes('nssl_combined_day')&&!nssl.includes('nssl_combined_day'), 'Stale NSSL mirrored images must not be used');
 assert.match(nssl,/function nsslCard\(/);
