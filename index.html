@@ -258,50 +258,69 @@
 
     function nadocastCwaPanel(day){
       const host=document.createElement('div'),loading=document.createElement('div');
-      loading.className='status';loading.textContent='Loading CWA forecast-cycle history…';host.append(loading);
+      loading.className='status';loading.textContent='Checking NADOCast valid-time alignment…';
+      host.append(loading);
       const office=currentWfo;
+      // Every card is anchored to a specific 12Z–12Z UTC outlook period.
+      // No archived item from another outlook day can appear here.
+      const now=new Date();
+      const date=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()));
+      date.setUTCDate(date.getUTCDate()+day-1);
+      const validDate=date.toISOString().slice(0,10);
+      const nextDate=new Date(date);nextDate.setUTCDate(nextDate.getUTCDate()+1);
+      const period=validDate+' 12Z – '+nextDate.toISOString().slice(0,10)+' 12Z';
       manifest(office).then(data=>{
         if(!host.isConnected)return;
         loading.remove();
-        const products=data.products?.[`day${day}`]||{};
-        const history=data.trends?.[`day${day}`]||{};
+        const products=data.valid_products?.[validDate]||{};
+        const history=data.trends_by_valid_date?.[validDate]||{};
         const defs=[['tornado','Tornado'],['wind_adj','Wind'],['hail','Hail']];
-        const available=defs.filter(([key])=>products[key] || history[key]?.length);
+        const eligible=p=>p && p.valid_date===validDate &&
+          p.valid_start_utc && p.valid_end_utc &&
+          p.outlook_start_utc && p.outlook_end_utc;
+        const available=defs.filter(([key])=>
+          eligible(products[key])||(history[key]||[]).some(eligible));
+        const note=document.createElement('div');note.className='status';
+        note.textContent='Outlook valid '+period+' UTC · Site built '+(data.generated_utc||'unknown');
+        host.append(note);
         if(!available.length){
           const msg=document.createElement('div');msg.className='missing';
-          msg.textContent=day===2?'No generated Day 2 NADOCast forecast cycles are available.':
-            `No generated NADOCast package is available for ${office}.`;
+          msg.textContent='No NADOCast guidance archived for the '+validDate+
+            ' 12Z outlook period. Older forecasts for other days are intentionally hidden.';
           host.append(msg);return;
         }
-        const info=document.createElement('div');info.className='status';
-        info.textContent=`Last site build ${data.generated_utc||'unknown time'}; forecasts are labeled by actual model cycle.`;
-        host.append(info,tabbed(available.map(([key,name])=>{
+        host.append(tabbed(available.map(([key,name])=>{
+          const archived=(history[key]||[]).filter(eligible);
           const current=products[key];
-          const archived=history[key]||[];
-          const records=archived.length?archived:[current].filter(Boolean);
+          const records=archived.length?archived:[current].filter(eligible);
           const frames=records.map(p=>({
-            src:`nadocast/${office}/${p.image}`,
-            label:`NADOCast ${name} · ${p.run_date} ${String(p.run_dir).toUpperCase()} · ${p.lead_label}`,
-            ...p
+            ...p,
+            src:'nadocast/'+office+'/'+p.image,
+            label:'NADOCast '+name+' · Init '+p.init_utc+
+              ' · f'+String(p.lead_label||'').replace(/^f/i,'')+
+              ' · Valid '+p.valid_start_utc+' – '+p.valid_end_utc
           }));
-          const shown=image(frames[0].src,`NADOCast ${name} for ${office}`,frames[0].label);
+          const shown=image(frames[0].src,'NADOCast '+name+' for '+office,frames[0].label);
           const stats=document.createElement('div');stats.className='stats';
           const update=frame=>{
-            stats.textContent=`CWA max ${percent(frame.max_cwa)} | CWA mean ${percent(frame.mean_cwa)} | Buffer max ${percent(frame.max_buffer)}`;
+            stats.textContent='CWA max '+percent(frame.max_cwa)+
+              ' | CWA mean '+percent(frame.mean_cwa)+
+              ' | Buffer max '+percent(frame.max_buffer);
           };
-          shown.wrap.append(stats);
-          update(frames[0]);
-          if(frames.length>1)addTrend(shown.wrap,shown.img,frames,shown.label,update);
-          else{
-            const note=document.createElement('div');note.className='status-detail';
-            note.textContent='One forecast cycle archived. Additional model cycles will populate as scheduled builds complete.';
-            shown.wrap.append(note);
+          shown.wrap.append(stats);update(frames[0]);
+          if(frames.length>1){
+            addTrend(shown.wrap,shown.img,frames,shown.label,update);
+          }else{
+            const message=document.createElement('div');message.className='status-detail';
+            message.textContent='One initialization currently archived for this valid period.';
+            shown.wrap.append(message);
           }
           return {label:name,node:shown.wrap};
         })));
       }).catch(()=>{
         if(!host.isConnected)return;
-        loading.className='missing';loading.textContent=`No generated NADOCast maps are available for ${office}.`;
+        loading.className='missing';
+        loading.textContent='No NADOCast manifest available for '+office+'.';
       });
       return host;
     }
