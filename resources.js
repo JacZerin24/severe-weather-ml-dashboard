@@ -6,6 +6,9 @@ const GUIDANCE_RESOURCES=[
     title:'Convective hazard forecasting',
     context:'Medium-range and short-range model guidance',
     items:[
+      {name:'StormNet',lab:'StormNet / OpenSnow',tag:'0–14 days / external viewer',
+       about:'AI guidance for lightning, hail, damaging wind and tornado risk, with radar overlays. Open the live map; integrated data requires licensed API access.',
+       url:'https://stormnet.ai/stormnet'},
       {name:'NCAR AI-NWP Convective Hazards',lab:'NSF NCAR',tag:'Day 1–8 / research',
        about:'Pangu, FengWu and WeatherNext-based convective-hazard probabilities, with run selection and GEFS comparisons.',
        url:'https://www2.mmm.ucar.edu/projects/ncar_ensemble/ainwp/index.php'},
