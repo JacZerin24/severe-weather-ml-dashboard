@@ -1,108 +1,163 @@
 #!/usr/bin/env python3
-"""Preserve locally generated NADOCast CWA forecast cycles between Pages builds.
+"""Persist NADOCast CWA history by actual UTC outlook valid date (12Z–12Z).
 
-GitHub Pages deploys a brand-new site directory on every run. This module
-stores a bounded, per-CWA snapshot archive in a GitHub Actions cache, then
-publishes only existing frames into the site's static directory.
+The cache may contain older day1/day2-keyed entries. Migrate them by
+recomputing valid dates from initialization and forecast lead, not old labels.
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
 import re
 import shutil
 from pathlib import Path
 
+from forecast_validity import RUN_HOURS, annotate
+
 HAZARDS = ("tornado", "wind_adj", "hail")
-DAYS = ("day1", "day2")
-RUN_HOURS = {"t0z": 0, "t00z": 0, "t10z": 10, "t12z": 12, "t14z": 14, "t18z": 18, "t20z": 20}
+FRAME_FIELDS = (
+    "hazard", "run_date", "run_dir", "lead_label",
+    "max_cwa", "mean_cwa", "max_buffer",
+    "valid_date", "valid_start_utc", "valid_end_utc",
+    "outlook_start_utc", "outlook_end_utc", "init_utc",
+)
 
 
-def safe_filename(day: str, hazard: str, product: dict) -> str:
-    date = str(product.get("run_date", ""))
-    run = str(product.get("run_dir", "")).lower()
-    lead = str(product.get("lead_label", ""))
-    if not re.fullmatch(r"\d{8}", date) or run not in RUN_HOURS or not re.fullmatch(r"f\d{1,3}(?:-\d{1,3})?", lead):
-        raise ValueError(f"Unexpected run identifiers: {date}, {run}, {lead}")
-    return f"{day}_{hazard}_{date}_{run}_{lead}.png"
+def safe_filename(hazard: str, item: dict) -> str:
+    valid = str(item.get("valid_date", ""))
+    date = str(item.get("run_date", ""))
+    run = str(item.get("run_dir", "")).lower()
+    lead = str(item.get("lead_label", ""))
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", valid) or not re.fullmatch(r"\d{8}", date):
+        raise ValueError("Invalid NADOCast date identifier")
+    if run not in RUN_HOURS or not re.fullmatch(r"f\d{1,3}-\d{1,3}", lead):
+        raise ValueError("Invalid NADOCast run or lead identifier")
+    if hazard not in HAZARDS:
+        raise ValueError("Invalid NADOCast hazard")
+    return f"{valid}_{hazard}_{date}_{run}_{lead}.png"
 
 
 def sort_key(frame: dict) -> tuple:
-    return (
-        str(frame.get("run_date", "")),
-        RUN_HOURS.get(str(frame.get("run_dir", "")).lower(), -1),
-        str(frame.get("lead_label", "")),
-    )
+    return (frame["init_utc"], frame["valid_start_utc"], frame["lead_label"])
 
 
-def update_cwa_trends(manifest_path: Path, archive_root: Path, max_frames: int = 4) -> dict:
-    """Update the archived recent frames and publish them beside latest.json.
+def update_cwa_trends(
+    manifest_path: Path,
+    archive_root: Path,
+    max_frames: int = 4,
+    *,
+    today: dt.date | None = None,
+) -> dict:
+    """Preserve latest N valid-date-matched model cycles per hazard.
 
-    All displayed images exist in the currently deployed Pages artifact. A
-    repeated build of the same forecast run does not duplicate the timeline.
+    Only valid periods matching today's or future 12Z-based outlook date
+    appear on the dashboard. Cached imagery for yesterday is retained briefly
+    for midnight rollover, never shown for today's outlook.
     """
     if max_frames < 1:
         raise ValueError("max_frames must be at least one")
+    today = today or dt.datetime.now(dt.timezone.utc).date()
+    allowed_dates = {
+        (today + dt.timedelta(days=offset)).isoformat()
+        for offset in (-1, 0, 1, 2)
+    }
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    cwa = manifest["cwa"]
-    archive_dir = archive_root / cwa
+    archive_dir = archive_root / manifest["cwa"]
     archive_dir.mkdir(parents=True, exist_ok=True)
     history_file = archive_dir / "history.json"
     try:
-        history = json.loads(history_file.read_text(encoding="utf-8")) if history_file.exists() else {}
+        existing = json.loads(history_file.read_text(encoding="utf-8")) if history_file.exists() else {}
     except (OSError, json.JSONDecodeError):
-        history = {}
+        existing = {}
 
-    for day in DAYS:
-        day_history = history.setdefault(day, {})
-        products = manifest.get("products", {}).get(day, {})
-        for hazard in HAZARDS:
-            entries = day_history.get(hazard, [])
-            # Retain only cache entries that still have a corresponding image.
-            entries = [entry for entry in entries if (archive_dir / Path(str(entry.get("image", ""))).name).is_file()
-                       and entry.get("image") and not Path(str(entry["image"])).is_absolute()]
-            current = products.get(hazard)
-            if current:
-                filename = safe_filename(day, hazard, current)
-                src = manifest_path.parent / current["image"]
-                if not src.is_file():
-                    raise FileNotFoundError(f"Generated NADOCast map absent: {src}")
-                shutil.copy2(src, archive_dir / filename)
-                entry = {k: current.get(k) for k in (
-                    "hazard", "run_date", "run_dir", "lead_label",
-                    "max_cwa", "mean_cwa", "max_buffer")}
-                entry["image"] = filename
-                # Replace duplicate run/lead combinations rather than appending.
-                entries = [e for e in entries if safe_filename(day, hazard, e) != filename]
-                entries.append(entry)
-            entries.sort(key=sort_key, reverse=True)
-            day_history[hazard] = entries[:max_frames]
+    frames_by_date: dict[str, dict[str, list[dict]]] = {}
 
-    # Delete unreferenced files to keep workflow caches bounded.
+    def insert(item: dict, hazard: str, source: Path | None = None) -> None:
+        if hazard not in HAZARDS:
+            return
+        try:
+            frame = annotate(item)
+        except (ValueError, KeyError, TypeError):
+            return
+        date = frame["valid_date"]
+        if date not in allowed_dates:
+            return
+        filename = safe_filename(hazard, frame)
+        archived_file = archive_dir / filename
+        if source is not None:
+            if not source.is_file():
+                raise FileNotFoundError(f"NADOCast source map missing: {source}")
+            shutil.copy2(source, archived_file)
+        elif not archived_file.is_file():
+            # Migrate a correctly dated existing archive image only.
+            original = Path(str(item.get("image", ""))).name
+            prior = archive_dir / original
+            if not original or not prior.is_file():
+                return
+            shutil.copy2(prior, archived_file)
+        data = {key: frame.get(key) for key in FRAME_FIELDS}
+        data["image"] = filename
+        entries = frames_by_date.setdefault(date, {}).setdefault(hazard, [])
+        entries[:] = [old for old in entries if old["image"] != filename]
+        entries.append(data)
+
+    if existing.get("schema_version") == 2:
+        sources = [
+            (hazard, item)
+            for date_group in existing.get("valid_dates", {}).values()
+            for hazard, frames in date_group.items()
+            for item in frames
+        ]
+    else:
+        # The legacy cache incorrectly classified some frames by Day 1/Day 2.
+        sources = [
+            (hazard, item)
+            for day in ("day1", "day2")
+            for hazard, frames in existing.get(day, {}).items()
+            for item in frames
+        ]
+    for hazard, item in sources:
+        insert(item, hazard)
+
+    # Insert the new build's real valid-date map(s).
+    for _valid_date, products in manifest.get("valid_products", {}).items():
+        for hazard, item in products.items():
+            insert(item, hazard, manifest_path.parent / item["image"])
+
+    for date, hazards in frames_by_date.items():
+        for hazard, frames in hazards.items():
+            frames.sort(key=sort_key, reverse=True)
+            hazards[hazard] = frames[:max_frames]
+
     retained = {
-        e["image"] for day in DAYS for hazard in HAZARDS
-        for e in history[day].get(hazard, [])
+        f["image"]
+        for hazards in frames_by_date.values()
+        for frames in hazards.values()
+        for f in frames
     }
     for path in archive_dir.glob("*.png"):
         if path.name not in retained:
             path.unlink()
 
-    published = {}
-    out_history = manifest_path.parent / "history"
-    out_history.mkdir(exist_ok=True)
-    for day in DAYS:
-        published[day] = {}
-        for hazard in HAZARDS:
-            frames = []
-            for entry in history[day].get(hazard, []):
-                src = archive_dir / entry["image"]
-                if not src.is_file():
+    output_dir = manifest_path.parent / "history"
+    output_dir.mkdir(exist_ok=True)
+    published: dict[str, dict[str, list[dict]]] = {}
+    for valid_date, hazards in sorted(frames_by_date.items()):
+        for hazard, frames in hazards.items():
+            for item in frames:
+                saved = archive_dir / item["image"]
+                if not saved.is_file():
                     continue
-                shutil.copy2(src, out_history / src.name)
-                frames.append({**entry, "image": "history/" + src.name})
-            if frames:
-                published[day][hazard] = frames
+                shutil.copy2(saved, output_dir / saved.name)
+                published.setdefault(valid_date, {}).setdefault(hazard, []).append(
+                    {**item, "image": "history/" + item["image"]}
+                )
 
-    history_file.write_text(json.dumps(history, indent=2), encoding="utf-8")
-    manifest["trends"] = published
+    history_file.write_text(json.dumps({
+        "schema_version": 2, "valid_dates": frames_by_date
+    }, indent=2), encoding="utf-8")
+    manifest["trends_by_valid_date"] = published
+    # Drop old trend keys so clients cannot accidentally present mixed periods.
+    manifest.pop("trends", None)
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return manifest

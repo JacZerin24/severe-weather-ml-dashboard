@@ -16,6 +16,8 @@ import numpy as np
 import requests
 from bs4 import BeautifulSoup
 
+from forecast_validity import describe_product
+
 BASE_URL = "http://data.nadocast.com"
 CWA_ZIPS = [
     "https://www.weather.gov/source/gis/Shapefiles/WSOM/w_16ap26.zip",
@@ -128,8 +130,15 @@ def find_products(date_arg: str, run_arg: str, hazards: list[str], days_back: in
             except Exception as exc:
                 errors.append(f"{folder_url(run_date, run_dir)}: {exc}")
                 continue
-            if found:
-                return run_date, run_dir, found
+            valid = []
+            for product in found:
+                try:
+                    describe_product(product.run_date, product.run_dir, product.lead)
+                    valid.append(product)
+                except ValueError as exc:
+                    log(f"Skipping NADOCast product outside one 12Z UTC outlook day: {product.filename}: {exc}")
+            if valid:
+                return run_date, run_dir, valid
     detail = "\n".join(errors[:8])
     raise FileNotFoundError(f"No matching NADOCast GRIB2 files found.\n{detail}")
 
@@ -292,7 +301,12 @@ def make_map(product: Product, grib_path: Path, overlay_path: Path | None, cwas,
     ax.set_ylim(miny, maxy)
     ax.set_xlabel("Longitude")
     ax.set_ylabel("Latitude")
-    ax.set_title(f"NADOCast {LABELS.get(product.hazard, product.hazard)} Probability — {cwa} CWA\n{product.run_date} {product.run_dir.upper()} | {product.lead} | Experimental guidance", fontsize=12)
+    validity = describe_product(product.run_date, product.run_dir, product.lead)
+    ax.set_title(
+        f"NADOCast {LABELS.get(product.hazard, product.hazard)} Probability — {cwa} CWA\n"
+        f"Init {validity.init_utc} | Valid {validity.valid_start_utc} to "
+        f"{validity.valid_end_utc} | Experimental", fontsize=12
+    )
     colorbar = fig.colorbar(mesh, ax=ax, shrink=.82, pad=.02, boundaries=palette["bounds"], ticks=palette["bounds"][:-1])
     colorbar.set_label("Probability (%)")
     pieces = []

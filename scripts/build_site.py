@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 from trend_history import update_cwa_trends
+from forecast_validity import annotate, describe_product
 
 DISPLAY_HAZARDS = {"tornado", "wind_adj", "hail"}
 ALL_HAZARDS = ["tornado", "wind_adj", "hail", "sig_tornado", "sig_wind_adj", "sig_hail"]
@@ -27,53 +28,62 @@ def read_cwas(path: Path) -> list[str]:
     return values
 
 
-def lead_start(label: str) -> int:
-    try:
-        return int(label.lower().lstrip("f").split("-", 1)[0])
-    except (TypeError, ValueError):
-        return 999
+def build_manifest(results: list[dict], cwa: str, out_dir: Path, *, today: dt.date | None = None) -> Path:
+    """Key all source products by their *actual* 12Z–12Z UTC valid date.
 
-
-def classify_day(lead_label: str) -> int:
-    # NADOCast 12Z f24-47 is the Day 2 period. Other routinely published
-    # windows (00Z f12-35, 12Z f02-23, 18Z f02-17) are displayed as Day 1.
-    return 2 if lead_start(lead_label) >= 24 else 1
-
-
-def build_manifest(results: list[dict], cwa: str, out_dir: Path) -> Path:
-    candidates: dict[tuple[int, str], dict] = {}
-    for item in results:
-        hazard = item.get("hazard")
+    A 12Z f24–47 source from yesterday can be today's Day 1 guidance.
+    Merely mapping lead <24 to Day 1 loses this important relationship.
+    """
+    today = today or dt.datetime.now(dt.timezone.utc).date()
+    candidates: dict[tuple[str, str], dict] = {}
+    skipped: list[str] = []
+    for source in results:
+        hazard = source.get("hazard")
         if hazard not in DISPLAY_HAZARDS:
             continue
-        day = classify_day(str(item.get("lead_label", "")))
-        key = (day, hazard)
-        current = candidates.get(key)
-        if current is None or lead_start(str(item.get("lead_label", ""))) < lead_start(str(current.get("lead_label", ""))):
+        try:
+            item = annotate(source)
+        except (ValueError, KeyError) as exc:
+            skipped.append(f"{source.get('filename', 'unknown')}: {exc}")
+            continue
+        key = (item["valid_date"], hazard)
+        old = candidates.get(key)
+        # Prefer newer model initializations, not the shorter lead label alone.
+        if old is None or (
+            item["init_utc"], item["valid_start_utc"], item["lead_label"]
+        ) > (
+            old["init_utc"], old["valid_start_utc"], old["lead_label"]
+        ):
             candidates[key] = item
 
-    products: dict[str, dict] = {"day1": {}, "day2": {}}
-    run_labels: list[str] = []
-    for (day, hazard), item in sorted(candidates.items()):
-        png_name = Path(item["png"]).name
-        products[f"day{day}"][hazard] = {
-            "image": png_name,
+    by_date: dict[str, dict[str, dict]] = {}
+    for (valid_date, hazard), item in sorted(candidates.items()):
+        out = {
+            "image": Path(item["png"]).name,
             "hazard": hazard,
-            "lead_label": item.get("lead_label"),
-            "run_date": item.get("run_date"),
-            "run_dir": item.get("run_dir"),
+            "lead_label": item["lead_label"],
+            "run_date": item["run_date"],
+            "run_dir": item["run_dir"],
             "max_cwa": item.get("max_cwa"),
             "mean_cwa": item.get("mean_cwa"),
             "max_buffer": item.get("max_buffer"),
         }
-        run_labels.append(f"{item.get('run_date', '')} {str(item.get('run_dir', '')).upper()}".strip())
+        out.update(describe_product(item["run_date"], item["run_dir"], item["lead_label"]).as_dict())
+        by_date.setdefault(valid_date, {})[hazard] = out
 
+    # Kept for backwards compatibility but strictly filter by UTC outlook day.
+    products = {
+        "day1": by_date.get(today.isoformat(), {}),
+        "day2": by_date.get((today + dt.timedelta(days=1)).isoformat(), {}),
+    }
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "cwa": cwa,
         "generated_utc": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-        "run_label": sorted(set(run_labels))[-1] if run_labels else "latest available NADOCast run",
+        "outlook_day_basis": "12Z–12Z UTC",
+        "valid_products": by_date,
         "products": products,
+        "skipped_invalid_windows": skipped[:25],
     }
     path = out_dir / "latest.json"
     path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")

@@ -10,6 +10,10 @@ on:
       - resources.js
       - scripts/check_dashboard.mjs
       - scripts/trend_history.py
+      - scripts/forecast_validity.py
+      - scripts/build_site.py
+      - scripts/run_nadocast_cwa.py
+      - scripts/run_nadocast_cwa_context.py
       - tests/**
       - .github/workflows/test-dashboard.yml
   workflow_dispatch:
