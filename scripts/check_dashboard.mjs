@@ -16,13 +16,21 @@ new vm.Script(resources,{filename:'resources.js'});
 const groups=new Function(resources+';return GUIDANCE_RESOURCES;')();
 const allLinks=groups.flatMap(group=>group.items);
 assert.equal(groups.length,3,'Three distinct forecast resource categories');
-assert.equal(allLinks.length,10,'Ten curated forecast guidance references');
+assert.equal(allLinks.length,11,'Eleven curated forecast guidance references including StormNet');
 assert.equal(new Set(allLinks.map(item=>item.url)).size,allLinks.length,'Resource URLs are unique');
 assert.ok(allLinks.every(item=>item.name&&item.lab&&item.about&&item.tag&&
   item.url.startsWith('https://')), 'Every resource has a verified HTTPS destination and description');
 assert.match(html,/href="dashboard\.css"/);
 assert.match(html,/src="resources\.js"/);
 assert.match(html,/class="site-header"/);
+assert.match(html,/function buildStormNetPanel\(/,'StormNet viewer spotlight exists');
+assert.match(html,/root\.append\(buildStormNetPanel\(\)\)/,'StormNet spotlight rendered');
+assert.match(html,/class="stormnet-nav-link"/,'StormNet has direct header navigation');
+assert.match(styling,/\.stormnet-spotlight/,'StormNet styling included');
+const stormnet=allLinks.filter(item=>item.name==='StormNet');
+assert.equal(stormnet.length,1,'Exactly one StormNet resource entry');
+assert.equal(stormnet[0].url,'https://stormnet.ai/stormnet','StormNet uses official live viewer');
+assert.ok(!html.includes('stormnet.ai/api/'),'No unlicensed StormNet forecast API calls');
 assert.match(resources,/section.id='resources'/); // Resource index must be reachable via the header nav.
 assert.ok(styling.includes('.resource-grid')&&styling.includes('.header-content'),
   'Responsive forecast-workstation and resource styles are included');

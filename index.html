@@ -86,6 +86,7 @@
       <a href="#day-3">Days 3–7</a>
       <a href="#long-range">Extended outlook</a>
       <a href="#resources">Resource index</a>
+      <a href="https://stormnet.ai/stormnet" target="_blank" rel="noopener noreferrer" class="stormnet-nav-link" aria-label="Open StormNet live forecast viewer in a new tab">StormNet live ↗</a>
       <span class="nav-note">Page refreshes every 30 minutes</span>
     </div></nav>
   </header>
@@ -333,10 +334,42 @@
     }
 
 
-        function build(){
+        function buildStormNetPanel(){
+      // External licensed product: viewer access, not embedded forecast data.
+      const section=document.createElement('aside');
+      section.className='stormnet-spotlight';
+      section.setAttribute('aria-label','StormNet live severe-weather guidance');
+      const heading=document.createElement('div');
+      heading.className='stormnet-spotlight-heading';
+      const eyebrow=document.createElement('span');
+      eyebrow.className='stormnet-source-tag';
+      eyebrow.textContent='External model · StormNet / OpenSnow';
+      const title=document.createElement('h2');
+      title.textContent='StormNet live guidance';
+      const detail=document.createElement('p');
+      detail.textContent='Lightning, hail, damaging wind and tornado risk forecasts from near-real-time through 14 days. Check initialization and valid time in the source viewer.';
+      heading.append(eyebrow,title,detail);
+      const actions=document.createElement('div');
+      actions.className='stormnet-spotlight-actions';
+      const link=document.createElement('a');
+      link.className='stormnet-viewer-link';
+      link.href='https://stormnet.ai/stormnet';
+      link.target='_blank';
+      link.rel='noopener noreferrer';
+      link.textContent='Open StormNet viewer ↗';
+      const note=document.createElement('span');
+      note.className='stormnet-access-note';
+      note.textContent='Live forecasts remain on StormNet · No data mirrored';
+      actions.append(link,note);
+      section.append(heading,actions);
+      return section;
+    }
+
+    function build(){
       document.getElementById('officeTitle').textContent='NWS '+offices[currentWfo]+' ('+currentWfo+')';
       const root=document.getElementById('dashboard');
       root.replaceChildren();
+      root.append(buildStormNetPanel());
       const now=new Date();
       const today=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()));
       const yesterday=new Date(today);
