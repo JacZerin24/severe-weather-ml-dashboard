@@ -130,8 +130,15 @@ def find_products(date_arg: str, run_arg: str, hazards: list[str], days_back: in
             except Exception as exc:
                 errors.append(f"{folder_url(run_date, run_dir)}: {exc}")
                 continue
-            if found:
-                return run_date, run_dir, found
+            valid = []
+            for product in found:
+                try:
+                    describe_product(product.run_date, product.run_dir, product.lead)
+                    valid.append(product)
+                except ValueError as exc:
+                    log(f"Skipping NADOCast product outside one 12Z UTC outlook day: {product.filename}: {exc}")
+            if valid:
+                return run_date, run_dir, valid
     detail = "\n".join(errors[:8])
     raise FileNotFoundError(f"No matching NADOCast GRIB2 files found.\n{detail}")
 
